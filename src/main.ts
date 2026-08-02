@@ -213,10 +213,10 @@ function wysiwygDecorations(plugin: PowerEditorPlugin) {
 				// (base style, plus bold / italic / strike where marked) and hide
 				// the markers. All ranges stay non-overlapping and adjacent.
 				const EMPH: [RegExp, number, string][] = [
-					[/\*\*(?=\S)[^\n]*?(?<=\S)\*\*/g, 2, "font-weight:var(--font-bold,700)"],
-					[/~~(?=\S)[^\n]*?(?<=\S)~~/g, 2, "text-decoration:line-through"],
-					[/(?<![\w*])\*(?=[^\s*])[^*\n]*?(?<=[^\s*])\*(?![\w*])/g, 1, "font-style:italic"],
-					[/(?<![\w_])_(?=[^\s_])[^_\n]*?(?<=[^\s_])_(?![\w_])/g, 1, "font-style:italic"],
+					[/\*\*(?:\S|\S[^\n]*?\S)\*\*/g, 2, "font-weight:var(--font-bold,700)"],
+					[/~~(?:\S|\S[^\n]*?\S)~~/g, 2, "text-decoration:line-through"],
+					[/(^|[^\w*])\*(?:[^\s*]|[^\s*][^*\n]*?[^\s*])\*(?![\w*])/g, 1, "font-style:italic"],
+					[/(^|[^\w_])_(?:[^\s_]|[^\s_][^_\n]*?[^\s_])_(?![\w_])/g, 1, "font-style:italic"],
 				];
 				const styleInner = (from: number, to: number, base: string) => {
 					const inner = view.state.doc.sliceString(from, to);
@@ -225,8 +225,10 @@ function wysiwygDecorations(plugin: PowerEditorPlugin) {
 						re.lastIndex = 0;
 						let em: RegExpExecArray | null;
 						while ((em = re.exec(inner))) {
-							const s = from + em.index;
-							const e = s + em[0].length;
+							// the italic patterns consume the character before their marker,
+							// standing in for a lookbehind, so the span starts after it
+							const s = from + em.index + (em[1]?.length ?? 0);
+							const e = from + em.index + em[0].length;
 							if (spans.some((sp) => s < sp.to && e > sp.from)) continue; // no overlap/nesting
 							spans.push({ from: s, to: e, mlen, style: st });
 						}
@@ -673,7 +675,7 @@ const TODAY_VIEW = "ped-today";
 const COMMENTS_VIEW = "ped-comments-view";
 // Hardcoded so it reflects the RUNNING code, not the on-disk manifest (which a
 // stale/cached plugin module would still report as current). Bump every build.
-const PED_BUILD = "1.52.3";
+const PED_BUILD = "1.52.4";
 
 /** Every toolbar button, for the visibility settings. */
 const BUTTON_IDS: [string, string][] = [
@@ -1819,13 +1821,12 @@ export default class PowerEditorPlugin extends Plugin {
 			if (!quiet) new Notice("Power Editor: nothing to copy.");
 			return;
 		}
-		const host = createDiv();
-		host.style.position = "fixed";
-		host.style.left = "-9999px";
+		const host = createDiv({ cls: "ped-offscreen" });
 		document.body.appendChild(host);
 		try {
 			const path = this.app.workspace.getActiveFile()?.path ?? "";
-			await MarkdownRenderer.render(this.app, md, host, path, new MarkdownRenderChild(host));
+			const child = new MarkdownRenderChild(host);
+			await MarkdownRenderer.render(this.app, md, host, path, child);
 			this.emailifyHtml(host);
 			// the Markdown rides along inside the HTML, so pasting back into
 			// Obsidian restores what was copied rather than a reading of it
@@ -1928,6 +1929,8 @@ export default class PowerEditorPlugin extends Plugin {
 	/** Indent guides on numbered lists. Body class rather than a CodeMirror
 	 *  extension: the guide is Obsidian's own chrome, so hiding it is a matter
 	 *  of not painting it, in both views at once. */
+	private outlineSheet: CSSStyleSheet | null = null;
+
 	applyListGuides() {
 		document.body.toggleClass("ped-no-ol-guides", this.settings.indentGuides === "no-ordered");
 		document.body.toggleClass("ped-no-guides", this.settings.indentGuides === "none");
@@ -1949,14 +1952,24 @@ export default class PowerEditorPlugin extends Plugin {
 	 *  list-style-type per nesting depth, injected as a <style> and refreshed
 	 *  when the config changes. The editor is handled by orderedListOutline. */
 	applyOutlineCss() {
-		document.getElementById("ped-ol-style")?.remove();
-		if (!this.settings.numberedOutline) return;
+		// One list-style-type per nesting depth, chosen in settings, so the rules
+		// cannot live in styles.css. A constructable sheet carries them without
+		// putting an element in the document; below Safari 16.4 the numbering
+		// simply stays at Obsidian's default.
+		if (typeof CSSStyleSheet === "undefined" || !("replaceSync" in CSSStyleSheet.prototype)) return;
+		if (!this.outlineSheet) {
+			this.outlineSheet = new CSSStyleSheet();
+			document.adoptedStyleSheets = [...document.adoptedStyleSheets, this.outlineSheet];
+		}
+		if (!this.settings.numberedOutline) {
+			this.outlineSheet.replaceSync("");
+			return;
+		}
 		const rules = this.settings.outlineStyles.map((style, d) => {
 			const sel = ".markdown-rendered " + Array(d + 1).fill("ol").join(" ");
 			return `${sel} { list-style-type: ${style}; }`;
 		});
-		const el = document.head.createEl("style", { attr: { id: "ped-ol-style" } });
-		el.textContent = rules.join("\n");
+		this.outlineSheet.replaceSync(rules.join("\n"));
 	}
 
 	/** Rebuild editor extensions so live-reading decoration engines (outline
@@ -2607,7 +2620,11 @@ export default class PowerEditorPlugin extends Plugin {
 		this.dropEl?.remove();
 		this.bubbleEl?.remove();
 		this.colorPop?.remove();
-		document.getElementById("ped-ol-style")?.remove();
+		if (this.outlineSheet) {
+			const sheet = this.outlineSheet;
+			document.adoptedStyleSheets = document.adoptedStyleSheets.filter((x) => x !== sheet);
+			this.outlineSheet = null;
+		}
 		for (const g of this.imgGrips) g.remove();
 		this.imgBadge?.remove();
 		document.body.removeClass("ped-wys");
@@ -3250,7 +3267,7 @@ export default class PowerEditorPlugin extends Plugin {
 			const ta = pane.createEl("textarea", { cls: "ped-tab-edit" });
 			ta.value = panes[i].body;
 			const grow = () => {
-				ta.style.height = "auto";
+				ta.style.removeProperty("height");
 				ta.style.height = ta.scrollHeight + 2 + "px";
 			};
 			grow();
@@ -3791,8 +3808,8 @@ export default class PowerEditorPlugin extends Plugin {
 				h.insertBefore(el, h.firstChild);
 			}
 			el.empty();
-			el.style.backgroundImage = "";
-			el.style.backgroundColor = "";
+			el.style.removeProperty("background-image");
+			el.style.removeProperty("background-color");
 			if (spec.kind === "gradient") {
 				el.style.backgroundImage = gradientCss(spec.value) ?? "";
 			} else if (spec.kind === "solid") {
@@ -6093,8 +6110,7 @@ export default class PowerEditorPlugin extends Plugin {
 			if (!drag) return;
 			const w = Math.round(Math.min(max, Math.max(40, startW + drag.dir * (ev.clientX - drag.startX))));
 			img.style.width = w + "px";
-			img.style.maxWidth = "none";
-			img.style.height = "auto";
+			img.addClass("ped-img-resizing");
 			// Mirror the stylesheet's centering live so the drag preview sits
 			// where the committed image will land: overflow past the column
 			// splits evenly, images inside the column stay put.
@@ -6732,7 +6748,7 @@ class LinkModal extends Modal {
 	 *  overlay and the title bar drags the window around. */
 	private floatify() {
 		const bg = this.containerEl.querySelector<HTMLElement>(".modal-bg");
-		if (bg) bg.style.opacity = "0.15";
+		if (bg) bg.addClass("ped-float-bg");
 		const el = this.modalEl;
 		const grip = this.titleEl;
 		grip.addClass("ped-drag-grip");
@@ -6741,8 +6757,7 @@ class LinkModal extends Modal {
 			const r = el.getBoundingClientRect();
 			const ox = e.clientX - r.left;
 			const oy = e.clientY - r.top;
-			el.style.position = "fixed";
-			el.style.margin = "0";
+			el.addClass("ped-floating");
 			el.style.left = `${r.left}px`;
 			el.style.top = `${r.top}px`;
 			const move = (ev: PointerEvent) => {

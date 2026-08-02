@@ -151,10 +151,13 @@ export function linkAt(line: string, ch: number): LinkInfo | null {
 		if (ch >= m.index && ch <= m.index + m[0].length)
 			return { start: m.index, end: m.index + m[0].length, text: m[2] ?? m[1], url: m[1], wiki: true };
 	}
-	const md = /(?<!\[)\[([^\]]*)\]\(([^)]*)\)/g;
+	// group 1 stands in for a lookbehind on "[", so it is skipped when the
+	// match is measured
+	const md = /(^|[^[])\[([^\]]*)\]\(([^)]*)\)/g;
 	while ((m = md.exec(line))) {
-		if (ch >= m.index && ch <= m.index + m[0].length)
-			return { start: m.index, end: m.index + m[0].length, text: m[1], url: m[2], wiki: false };
+		const start = m.index + m[1].length;
+		const end = m.index + m[0].length;
+		if (ch >= start && ch <= end) return { start, end, text: m[2], url: m[3], wiki: false };
 	}
 	// bare URLs count too (pasted links have no [text](…) wrapper); trailing
 	// sentence punctuation stays outside, and <angle autolinks> swallow their
@@ -214,7 +217,7 @@ export interface Marks {
 export function detectMarks(text: string): Marks {
 	return {
 		bold: /\*\*[^*]/.test(text) || /<(?:b|strong)[\s>]/i.test(text),
-		italic: /(?<!\*)\*[^*\n]+\*(?!\*)/.test(text) || /<(?:i|em)[\s>]/i.test(text),
+		italic: /(^|[^*])\*[^*\n]+\*(?!\*)/.test(text) || /<(?:i|em)[\s>]/i.test(text),
 		underline: /<u[\s>]/i.test(text),
 		strike: /~~[^~]/.test(text) || /<s[\s>]/i.test(text),
 		highlight: /==[^=]/.test(text) || /<mark[\s>]/i.test(text),
@@ -307,14 +310,17 @@ export function expandStyleRange(line: string, from: number, to: number): { from
 		/==[^=\n]+?==/g,
 		/<mark[^>]*>[\s\S]*?<\/mark>/gi,
 		/<span style="color:[^"]*">[\s\S]*?<\/span>/gi,
-		/\*\*(?=\S)[^\n]*?(?<=\S)\*\*/g,
-		/~~(?=\S)[^\n]*?(?<=\S)~~/g,
-		/(?<![\w*])\*(?=[^\s*])[^*\n]*?(?<=[^\s*])\*(?![\w*])/g,
-		/(?<![\w_])_(?=[^\s_])[^_\n]*?(?<=[^\s_])_(?![\w_])/g,
+		/\*\*(?:\S|\S[^\n]*?\S)\*\*/g,
+		/~~(?:\S|\S[^\n]*?\S)~~/g,
+		/(^|[^\w*])\*(?:[^\s*]|[^\s*][^*\n]*?[^\s*])\*(?![\w*])/g,
+		/(^|[^\w_])_(?:[^\s_]|[^\s_][^_\n]*?[^\s_])_(?![\w_])/g,
 	];
 	for (const re of res) {
 		let m: RegExpExecArray | null;
-		while ((m = re.exec(line))) spans.push([m.index, m.index + m[0].length]);
+		// two patterns above consume the character before their marker, standing
+		// in for a lookbehind, so the span starts after it
+		while ((m = re.exec(line)))
+			spans.push([m.index + (m[1]?.length ?? 0), m.index + m[0].length]);
 	}
 	let f = from;
 	let t = to;
@@ -355,7 +361,10 @@ export function sweepHighlights(text: string, background: string | null): { text
 	// boundary check refuses operator cross-pairs like "(==) … !==" whose
 	// inner text would start by CLOSING a bracket opened before the marker
 	const pairs = (seg: string, replace: (inner: string) => string) =>
-		seg.replace(/(?<!=)==(?=\S)([^=\n]+?)(?<=\S)==(?!=)/g, (m, inner: string) => {
+		seg.replace(
+			/==([^=\n\s]|[^=\n\s][^=\n]*?[^=\n\s])==(?!=)/g,
+			(m, inner: string, offset: number, whole: string) => {
+			if (whole[offset - 1] === "=") return m; // stands in for (?<!=)
 			if (/^[)\]]/.test(inner) || /[([]$/.test(inner)) return m;
 			count++;
 			return replace(inner);
@@ -369,9 +378,10 @@ export function sweepHighlights(text: string, background: string | null): { text
 		// … then leftover unpaired litter. A token survives only in operator
 		// shapes: spaced both sides, (==, ==), |==|, !==, or a spaced token
 		// followed by sentence punctuation ("Equality ==,").
-		out = out.replace(/(?<![=!])==(?!=)/g, (m, offset: number, whole: string) => {
+		out = out.replace(/==(?!=)/g, (m, offset: number, whole: string) => {
 			const left = whole[offset - 1];
 			const right = whole[offset + 2];
+			if (left === "=" || left === "!") return m; // stands in for (?<![=!])
 			if (spacey(left) && spacey(right)) return m;
 			if (left === "(" || left === "|" || right === ")" || right === "|") return m;
 			if (spacey(left) && right != null && /[.,;:?!]/.test(right)) return m;
@@ -381,9 +391,10 @@ export function sweepHighlights(text: string, background: string | null): { text
 		// adjacent import boundaries collapse into ==== runs embedded in text
 		// ("ActionBar====."); a standalone ==== line is a setext underline and
 		// stays, so only text-embedded runs are removed
-		out = out.replace(/(?<!=)====(?!=)/g, (m, offset: number, whole: string) => {
+		out = out.replace(/====(?!=)/g, (m, offset: number, whole: string) => {
 			const left = whole[offset - 1];
 			const right = whole[offset + 4];
+			if (left === "=") return m; // stands in for (?<!=)
 			if (spacey(left) && spacey(right)) return m;
 			count++;
 			return "";
@@ -414,8 +425,8 @@ export function stripFormatting(text: string): string {
 		t = t
 			.replace(/(\*\*\*|___)([^*_]+?)\1/g, "$2")
 			.replace(/(\*\*|__)([^*_]+?)\1/g, "$2")
-			.replace(/(?<![\w*])\*([^*\n]+?)\*(?![\w*])/g, "$1")
-			.replace(/(?<![\w_])_([^_\n]+?)_(?![\w_])/g, "$1")
+			.replace(/(^|[^\w*])\*([^*\n]+?)\*(?![\w*])/g, "$1$2")
+			.replace(/(^|[^\w_])_([^_\n]+?)_(?![\w_])/g, "$1$2")
 			.replace(/~~([^~]+?)~~/g, "$1")
 			.replace(/==([^=]+?)==/g, "$1")
 			.replace(/`([^`\n]+?)`/g, "$1");
@@ -464,10 +475,10 @@ export function cleanCopyText(md: string, mode: "clean" | "plain"): string {
  *  so an == operator or a spaced * is left alone. */
 export function mdEmphasisToHtml(text: string): string {
 	return text
-		.replace(/\*\*(?=\S)([^\n]*?)(?<=\S)\*\*/g, "<strong>$1</strong>")
-		.replace(/~~(?=\S)([^\n]*?)(?<=\S)~~/g, "<s>$1</s>")
-		.replace(/(?<![\w*])\*(?=[^\s*])([^*\n]*?)(?<=[^\s*])\*(?![\w*])/g, "<em>$1</em>")
-		.replace(/(?<![\w_])_(?=[^\s_])([^_\n]*?)(?<=[^\s_])_(?![\w_])/g, "<em>$1</em>");
+		.replace(/\*\*(\S|\S[^\n]*?\S)\*\*/g, "<strong>$1</strong>")
+		.replace(/~~(\S|\S[^\n]*?\S)~~/g, "<s>$1</s>")
+		.replace(/(^|[^\w*])\*([^\s*]|[^\s*][^*\n]*?[^\s*])\*(?![\w*])/g, "$1<em>$2</em>")
+		.replace(/(^|[^\w_])_([^\s_]|[^\s_][^_\n]*?[^\s_])_(?![\w_])/g, "$1<em>$2</em>");
 }
 
 /** The inverse: HTML emphasis back to Markdown, for when a highlight or color

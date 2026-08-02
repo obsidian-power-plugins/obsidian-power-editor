@@ -2580,3 +2580,31 @@ body.ped-no-guides .markdown-rendered.show-indentation-guide li > ol::before {
 .ped-order-row.drop-below::after {
 	bottom: -1px;
 }
+
+/* --- classes standing in for style assignments the review flags --- */
+
+/* Off-screen host used to render Markdown before putting HTML on the
+   clipboard. It must be in the document to render, but never seen. */
+.ped-offscreen {
+	position: fixed;
+	left: -9999px;
+}
+
+/* While an image is being dragged its width is set inline, per pointer move;
+   these two are constant for the whole gesture. */
+.ped-img-resizing {
+	max-width: none;
+	height: auto;
+}
+
+/* Floating dialog: the page stays readable behind it, and the window itself is
+   positioned inline as it is dragged. */
+.ped-float-bg {
+	opacity: 0.15;
+}
+
+.ped-floating {
+	position: fixed;
+	margin: 0;
+}
+
