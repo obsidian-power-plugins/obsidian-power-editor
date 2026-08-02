@@ -673,7 +673,7 @@ const TODAY_VIEW = "ped-today";
 const COMMENTS_VIEW = "ped-comments-view";
 // Hardcoded so it reflects the RUNNING code, not the on-disk manifest (which a
 // stale/cached plugin module would still report as current). Bump every build.
-const PED_BUILD = "1.52.0";
+const PED_BUILD = "1.52.3";
 
 /** Every toolbar button, for the visibility settings. */
 const BUTTON_IDS: [string, string][] = [
