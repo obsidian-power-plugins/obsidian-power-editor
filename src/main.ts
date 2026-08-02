@@ -2936,7 +2936,7 @@ export default class PowerEditorPlugin extends Plugin {
 				new TextPromptModal(this.app, "Due date — a date or phrase like 'next friday' or 'aug 1'", t.due ?? today, (raw) => {
 					const d = parseDatePhrase(raw, todayStr());
 					if (d) set(d);
-					else new Notice("Couldn't read that as a date.");
+					else new Notice("Power Editor: couldn't read that as a date.");
 				}).open();
 			})
 		);
@@ -3237,7 +3237,7 @@ export default class PowerEditorPlugin extends Plugin {
 			pane.empty();
 			const p = panes[i];
 			if (p.body.trim()) void MarkdownRenderer.render(this.app, p.body, pane, ctx.sourcePath, child);
-			else pane.createSpan({ cls: "ped-tab-empty", text: "Empty tab — click to add content" });
+			else pane.createSpan({ cls: "ped-tab-empty", text: "Empty tab (click to add content)" });
 			pane.onclick = (e) => {
 				if ((e.target as HTMLElement).closest("a, input, button, .task-list-item-checkbox")) return;
 				editView(pane, i);
@@ -3532,7 +3532,7 @@ export default class PowerEditorPlugin extends Plugin {
 	private renderColumnsBasic(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) {
 		const panes = parseColumns(source);
 		if (!panes.length) {
-			el.createEl("em", { text: "Empty columns block — separate columns with '---' lines." });
+			el.createEl("em", { text: "Empty columns block (separate columns with '---' lines." });
 			return;
 		}
 		const child = new MarkdownRenderChild(el);
@@ -4049,7 +4049,7 @@ export default class PowerEditorPlugin extends Plugin {
 				new TextPromptModal(this.app, "Verified until — a date or phrase like 'in 6 months'", "in 6 months", (raw) => {
 					const d = parseDatePhrase(raw, todayStr());
 					if (d) write(d);
-					else new Notice("Couldn't read that as a date.");
+					else new Notice("Power Editor: couldn't read that as a date.");
 				}).open()
 			)
 		);
@@ -4360,7 +4360,7 @@ export default class PowerEditorPlugin extends Plugin {
 
 	private applyHeading(ed: Editor, level: number) {
 		if (this.inTableCell()) {
-			new Notice("A table cell cannot be a heading.", 4000);
+			new Notice("Power Editor: a table cell cannot be a heading.", 4000);
 			return;
 		}
 		const from = ed.getCursor("from").line;
@@ -4989,7 +4989,7 @@ export default class PowerEditorPlugin extends Plugin {
 		}
 		this.painter = { marks, sticky };
 		this.paintButtons(true);
-		new Notice(sticky ? "Format painter locked — Esc or click the brush to stop." : "Format painter armed — select the text to paint.");
+		new Notice(sticky ? "Format painter locked (Esc or click the brush to stop)." : "Format painter armed (select the text to paint).");
 	}
 
 	private paintButtons(on: boolean) {
@@ -5087,7 +5087,7 @@ export default class PowerEditorPlugin extends Plugin {
 		};
 		rec.start();
 		this.setRecording(true);
-		new Notice("Recording — click the mic again to stop.");
+		new Notice("Power Editor: recording (click the mic again to stop).");
 	}
 
 	private setRecording(on: boolean) {
@@ -5408,7 +5408,7 @@ export default class PowerEditorPlugin extends Plugin {
 		const lines = ed.getValue().split("\n");
 		const probe = sweepHighlights(lines.join("\n"), null);
 		if (!probe.count) {
-			new Notice("No ==highlights== in this note.");
+			new Notice("Power Editor: no ==highlights== in this note.");
 			return;
 		}
 		this.showHighlightSweepMenu(`${probe.count} highlight${probe.count === 1 ? "" : "s"} in this note`, (hex) => {
@@ -5434,7 +5434,7 @@ export default class PowerEditorPlugin extends Plugin {
 			}
 		}
 		if (!total) {
-			new Notice("No ==highlights== found in the vault.");
+			new Notice("Power Editor: no ==highlights== found in the vault.");
 			return;
 		}
 		this.showHighlightSweepMenu(`all ${total} highlights across ${hits.length} notes`, (hex) => {
@@ -5555,7 +5555,7 @@ export default class PowerEditorPlugin extends Plugin {
 				.trim();
 			if (out) this.insertDictation(ed, out);
 		} catch (e) {
-			new Notice("Power Editor: AI call failed — " + (e instanceof Error ? e.message : String(e)));
+			new Notice("Power Editor: AI call failed: " + (e instanceof Error ? e.message : String(e)));
 		}
 	}
 
@@ -5653,7 +5653,7 @@ export default class PowerEditorPlugin extends Plugin {
 							});
 						}
 					} catch {
-						new Notice("Couldn't find that callout's header line.");
+						new Notice("Power Editor: couldn't find that callout's header line.");
 					}
 					return;
 				}
@@ -6145,12 +6145,12 @@ export default class PowerEditorPlugin extends Plugin {
 	private editImageLine(img: HTMLImageElement, fn: (text: string, target: string) => string | null) {
 		const info = this.embedLineOf(img);
 		if (!info) {
-			new Notice("Couldn't find that image's embed.");
+			new Notice("Power Editor: couldn't find that image's embed.");
 			return;
 		}
 		const next = fn(info.text, info.target);
 		if (next == null) {
-			new Notice("Couldn't find that image's embed.");
+			new Notice("Power Editor: couldn't find that image's embed.");
 			return;
 		}
 		if (next !== info.text) {
@@ -6700,7 +6700,7 @@ class LinkModal extends Modal {
 		});
 		new Setting(c)
 			.setName("Address")
-			.setDesc("A web URL — or pick a note below instead.")
+			.setDesc("A web URL, or pick a note below instead.")
 			.addText((t) => {
 				t.setPlaceholder("https://…").setValue(this.address).onChange((v) => {
 					this.address = v;
@@ -7502,7 +7502,7 @@ class PowerEditorSettingTab extends PluginSettingTab {
 		section("Editing", "editing");
 		new Setting(c)
 			.setName("Selection bubble")
-			.setDesc("A compact formatting bubble appears right at your selection — the fastest way to format.")
+			.setDesc("A compact formatting bubble appears right at your selection (the fastest way to format).")
 			.addToggle((t) => t.setValue(s.showBubble).onChange((v) => ((s.showBubble = v), save())))
 			.then((st) => help(st, "Select text and a small toolbar floats next to it, so you do not have to reach for the top bar. It follows the selection and vanishes when you click away."));
 		new Setting(c)
@@ -7575,7 +7575,7 @@ class PowerEditorSettingTab extends PluginSettingTab {
 			);
 		new Setting(c)
 			.setName("Line spacing")
-			.setDesc("How much your pages breathe — applies to editing and reading views.")
+			.setDesc("How much your pages breathe (applies to editing and reading views).")
 			.addDropdown((d) =>
 				d
 					.addOption("compact", "Compact")
@@ -7740,7 +7740,7 @@ class PowerEditorSettingTab extends PluginSettingTab {
 		section("Numbered list outline", "lists");
 		new Setting(c)
 			.setName("Multilevel numbering (outline style)")
-			.setDesc("Style nested numbered lists by level — 1, 2, 3 then a, b, c then i, ii, iii — instead of restarting at 1 everywhere. Applies in editing and reading views; the raw number shows while your cursor is on the line.")
+			.setDesc("Style nested numbered lists by level (1, 2, 3 then a, b, c then i, ii, iii) instead of restarting at 1 everywhere. Applies in editing and reading views; the raw number shows while your cursor is on the line.")
 			.addToggle((t) =>
 				t.setValue(s.numberedOutline).onChange((v) => {
 					s.numberedOutline = v;
@@ -7826,7 +7826,7 @@ class PowerEditorSettingTab extends PluginSettingTab {
 			.then((st) => help(st, "The Claude model the AI actions call. Haiku is fast and inexpensive for quick edits; a larger model gives stronger rewrites. Clear the box to restore the default."));
 		new Setting(c)
 			.setName("Custom AI actions")
-			.setDesc('Your own one-click instructions on the AI menu — e.g. "Rewrite as a customer-friendly email".')
+			.setDesc('Your own one-click instructions on the AI menu, e.g. "Rewrite as a customer-friendly email".')
 			.addButton((b) =>
 				b.setButtonText("Add action").onClick(() => {
 					s.aiActions.push({ name: "", prompt: "" });
