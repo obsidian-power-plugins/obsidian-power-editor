@@ -135,3 +135,9 @@ Nothing in Obsidian's spacing variables reaches them: `--p-spacing` only covers 
 They are independent, because a table usually wants more breathing room than a paragraph does. Where a table follows a heading directly, that one blank line is both things at once; the heading setting wins, so a heading sits the same distance from whatever comes next.
 
 Each has presets from Roomy (18px) through Half (12px, the default) to None, and a box beside the dropdown that takes any value from 0 to 60 for anything in between. The file is untouched either way: the blank line is still there, so the Markdown still parses everywhere else. The cursor looks short while it sits on one of those lines and returns to normal as soon as you type.
+
+## Support
+
+Power Editor is built and maintained by one person. If it earns a place in your
+daily vault, you can [buy me a coffee](https://buymeacoffee.com/powerplugins).
+Nothing in the plugin is held back either way.
