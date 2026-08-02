@@ -1347,3 +1347,33 @@ eq(dnd(1, 3), "acbd", "a middle move down");
 eq(dnd(2, 1), "acbd", "a middle move up");
 eq(moveItem(["a"], 0, 0).join(""), "a", "a one-item list survives");
 eq(moveItem(["a", "b"], 5, 0).join(""), "ab", "an out-of-range source is ignored");
+
+// --- the deploy guard ---
+// Two sessions building this plugin at once is enough for the second to
+// overwrite the first with an older build, silently. The comparison is where a
+// bug would disable the guard without failing anything, so it is pinned here.
+{
+	const { compareVersions, isDowngrade, versionFromManifest } = require("../deploy-guard.mjs");
+
+	eq(compareVersions("1.89.1", "1.89.0") > 0, true, "a later patch sorts after");
+	eq(compareVersions("1.89.0", "1.89.1") < 0, true, "and an earlier one before");
+	eq(compareVersions("1.89.1", "1.89.1"), 0, "the same version ties");
+	// the whole reason this compares numbers: as strings, "1.9.0" sorts after
+	// "1.10.0", which is exactly backwards
+	eq(compareVersions("1.10.0", "1.9.0") > 0, true, "10 is a later minor than 9, not an earlier one");
+	eq(compareVersions("1.88.10", "1.88.9") > 0, true, "and the same holds for the patch");
+	eq(compareVersions("2.0.0", "1.99.99") > 0, true, "a major bump outranks everything under it");
+	eq(compareVersions("1.89", "1.89.0"), 0, "a missing part counts as zero");
+	eq(compareVersions("", ""), 0, "two unreadable versions tie rather than throwing");
+
+	eq(isDowngrade("1.89.1", "1.88.1"), true, "deploying an older build over a newer one is the collision this catches");
+	eq(isDowngrade("1.88.1", "1.89.1"), false, "the ordinary direction is not");
+	eq(isDowngrade("1.89.1", "1.89.1"), false, "and neither is redeploying the same version, which is what developing looks like");
+	eq(isDowngrade(null, "1.89.1"), false, "a vault with nothing installed has nothing to lose");
+	eq(isDowngrade("", "1.89.1"), false, "nor one whose version could not be read");
+
+	eq(versionFromManifest("{ not json"), null, "a manifest too broken to parse names no version");
+	eq(versionFromManifest("{}"), null, "and neither does one with no version key");
+	eq(versionFromManifest('{"version":"1.2.3"}'), "1.2.3", "otherwise the version is read off it");
+	eq(versionFromManifest('{"version":"  "}'), null, "a blank version is no version");
+}
