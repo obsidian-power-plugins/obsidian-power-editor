@@ -1,0 +1,2582 @@
+/* ---------- the formatting toolbar ---------- */
+
+.ped-toolbar {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 2px;
+	padding: 4px 10px;
+	border-bottom: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+.ped-toolbar.ped-hidden {
+	display: none;
+}
+
+button.ped-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 26px;
+	padding: 0;
+	border: none;
+	border-radius: 5px;
+	background: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	cursor: default;
+}
+
+button.ped-btn:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+button.ped-btn.is-active {
+	background: var(--background-modifier-hover);
+	color: var(--text-accent);
+}
+
+button.ped-btn svg {
+	width: 16px;
+	height: 16px;
+}
+
+button.ped-heading {
+	width: auto;
+	min-width: 34px;
+	padding: 0 8px;
+	font-size: 12.5px;
+	font-weight: 600;
+}
+
+.ped-sep {
+	width: 1px;
+	height: 18px;
+	margin: 0 5px;
+	background: var(--background-modifier-border);
+}
+
+/* phones: one scrollable strip */
+body.is-mobile .ped-toolbar {
+	flex-wrap: nowrap;
+	overflow-x: auto;
+}
+
+/* ---------- block drag handles ---------- */
+
+.ped-handle {
+	position: fixed;
+	z-index: 60;
+	display: flex;
+	align-items: center;
+	padding: 2px 1px;
+	border-radius: 4px;
+	color: var(--text-muted);
+	background: var(--background-primary);
+	cursor: grab;
+}
+
+.ped-handle:hover {
+	color: var(--text-muted);
+	background: var(--background-modifier-hover);
+}
+
+.ped-handle svg {
+	width: 14px;
+	height: 16px;
+}
+
+.ped-dropline {
+	position: fixed;
+	z-index: 60;
+	height: 3px;
+	border-radius: 2px;
+	background: var(--interactive-accent);
+	pointer-events: none;
+}
+
+body.ped-dragging,
+body.ped-dragging * {
+	cursor: grabbing !important;
+	user-select: none !important;
+}
+
+/* ---------- the selection bubble ---------- */
+
+.ped-bubble {
+	position: fixed;
+	z-index: 70;
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 3px 4px;
+	border-radius: 8px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	box-shadow: var(--shadow-s);
+}
+
+/* ---------- color palette popover ---------- */
+
+.ped-colorpop {
+	position: fixed;
+	z-index: 80;
+	width: 224px;
+	padding: 10px;
+	border-radius: 10px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	box-shadow: var(--shadow-s);
+}
+
+.ped-colorpop-title {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	margin-bottom: 8px;
+}
+
+.ped-swatches {
+	display: grid;
+	grid-template-columns: repeat(8, 1fr);
+	gap: 5px;
+}
+
+button.ped-swatch {
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border-radius: 5px;
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: none;
+	cursor: default;
+}
+
+button.ped-swatch:hover {
+	transform: scale(1.15);
+	border-color: var(--text-accent);
+}
+
+input.ped-colorpicker {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ped-colorpop-foot {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+	margin-top: 10px;
+}
+
+button.ped-colorpop-btn {
+	font-size: 12px;
+	padding: 3px 10px;
+	height: auto;
+	box-shadow: none;
+	background: var(--background-modifier-hover);
+	border-radius: 5px;
+	cursor: default;
+}
+
+/* ---------- WYSIWYG: keep formatting characters hidden even at the cursor ---------- */
+
+body.ped-wys .markdown-source-view.mod-cm6 :is(
+	.cm-formatting-strong,
+	.cm-formatting-em,
+	.cm-formatting-strikethrough,
+	.cm-formatting-highlight,
+	.cm-formatting-header
+) {
+	display: none;
+}
+
+/* links: hide the brackets, parens, and URL string even at the cursor — the
+   Link dialog is how links get made and edited in WYSIWYG mode */
+body.ped-wys .markdown-source-view.mod-cm6 :is(.cm-formatting-link, .cm-formatting-link-string, .cm-string.cm-url) {
+	display: none;
+}
+
+/* [[target|alias]]: show only the alias */
+body.ped-wys .markdown-source-view.mod-cm6 :is(.cm-hmd-internal-link.cm-link-has-alias, .cm-hmd-internal-link.cm-link-alias-pipe) {
+	display: none;
+}
+
+/* callouts: the [!type] token (and its fold char) never shows while editing —
+   the type already reads through the callout's color and emoji. The formatting
+   hider above misses it because callout tokens are cm-hmd-callout, not
+   cm-formatting-*. Scoped to Live Preview so source mode stays fully literal. */
+body.ped-wys .markdown-source-view.mod-cm6.is-live-preview .cm-hmd-callout {
+	display: none;
+}
+
+/* ---------- link dialog ---------- */
+
+.ped-label {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	margin: 14px 0 6px;
+}
+
+input.ped-link-search {
+	width: 100%;
+}
+
+.ped-link-picked {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+	font-size: 13px;
+	color: var(--text-muted);
+}
+
+.ped-link-target {
+	color: var(--text-accent);
+	font-weight: 600;
+}
+
+.ped-link-results {
+	margin-top: 8px;
+	max-height: 240px;
+	overflow-y: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+}
+
+.ped-link-row {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	padding: 6px 10px;
+	cursor: default;
+}
+
+.ped-link-row:hover {
+	background: var(--background-modifier-hover);
+}
+
+.ped-link-row.is-picked {
+	background: var(--background-modifier-hover);
+}
+
+.ped-link-row.is-picked .ped-link-name {
+	color: var(--text-accent);
+}
+
+.ped-link-path {
+	font-size: 11px;
+	color: var(--text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ped-link-empty {
+	padding: 12px;
+	color: var(--text-muted);
+	font-size: 12.5px;
+}
+
+.ped-drag-grip {
+	cursor: move;
+	user-select: none;
+}
+
+/* the mic while dictation is live */
+button.ped-btn.is-recording {
+	color: var(--text-error);
+	background: rgba(var(--color-red-rgb), 0.12);
+	animation: ped-rec-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes ped-rec-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 rgba(var(--color-red-rgb), 0.35);
+	}
+	50% {
+		box-shadow: 0 0 0 5px rgba(var(--color-red-rgb), 0);
+	}
+}
+
+.ped-modal-btns {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+.ped-modal-btns button {
+	cursor: default;
+}
+
+/* ---------- table grid picker ---------- */
+
+.ped-tablepop {
+	width: auto;
+}
+
+.ped-tablegrid {
+	display: grid;
+	grid-template-columns: repeat(8, 20px);
+	gap: 3px;
+}
+
+.ped-tablecell {
+	width: 20px;
+	height: 20px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 3px;
+	background: var(--background-primary);
+}
+
+.ped-tablecell.is-on {
+	background: var(--interactive-accent);
+	border-color: var(--interactive-accent);
+	opacity: 0.75;
+}
+
+/* ---------- multilevel list numbering ----------
+   The editor shows the ordered-list number as literal text; this widget
+   stands in for it (a, b, i, …) and must read like the number it replaces. */
+
+.ped-ol-num {
+	color: inherit;
+	font: inherit;
+	/* the letter + its "." render as one flush unit, Word-style */
+	letter-spacing: normal;
+}
+
+/* ---------- live checkbox on the active task line ----------
+   The box that fills in for Obsidian's revealed "- [ ]" while you edit that
+   line. It carries Obsidian's own task-list-label/checkbox classes so Obsidian's
+   editor CSS positions it identically to the checkboxes on the other lines;
+   only the cursor is ours to set. */
+.ped-live-task .task-list-item-checkbox {
+	cursor: pointer;
+}
+
+/* ---------- empty-heading placeholder ----------
+   A greyed "Heading N" label on an otherwise-empty heading line, so a
+   hash-hidden heading is recognizable the way Notion shows it. */
+
+body.ped-wys .ped-heading-ph::after {
+	content: attr(data-ped-hph);
+	color: var(--text-muted);
+	pointer-events: none;
+	font-weight: inherit;
+}
+
+/* ---------- image resize ---------- */
+
+.ped-imgrip {
+	position: fixed;
+	z-index: 65;
+	width: 12px;
+	height: 12px;
+	border-radius: 3px;
+	border: 2px solid var(--interactive-accent);
+	background: var(--background-primary);
+	box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+	/* per-corner cursor is set inline (nwse for nw/se, nesw for ne/sw) */
+	cursor: nwse-resize;
+}
+
+.ped-imgbadge {
+	position: fixed;
+	z-index: 66;
+	padding: 2px 8px;
+	border-radius: 5px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-size: 11.5px;
+	font-weight: 600;
+	pointer-events: none;
+}
+
+body.ped-imgresizing,
+body.ped-imgresizing * {
+	cursor: var(--ped-resize-cursor, nwse-resize) !important;
+	user-select: none !important;
+}
+
+/* ---------- wide images (a sized image may pass the readable column) ---------- */
+
+/* The plugin measures every markdown pane and publishes the free room on
+   each side of the readable column as --ped-img-bleed (0 when the column
+   fills the pane, and in unmeasured spots like hover popovers and PDF
+   export). An image with an explicit width may spend that room; unsized
+   images keep the normal fit-to-column cap.
+
+   Obsidian wraps embeds in a fit-content box (div.image-embed, often with
+   an inner .image-wrapper), so the cap has to lift on the box when it
+   carries the width attribute; the bare img rules cover chains without
+   such a box. These base rules grow one side's worth, left aligned, so
+   engines without modern attr() can never grow a sideways scrollbar. */
+.markdown-source-view.mod-cm6 .image-embed[width],
+.markdown-preview-view .image-embed[width] {
+	width: max-content;
+	max-width: calc(100% + var(--ped-img-bleed, 0px));
+}
+
+.markdown-source-view.mod-cm6 img[width]:not([class], .image-embed[width] img),
+.markdown-preview-view img[width]:not([class], .image-embed[width] img) {
+	max-width: calc(100% + var(--ped-img-bleed, 0px));
+}
+
+/* Where attr() works in calc (Chromium 133+, which desktop Obsidian has),
+   grow up to both sides' room and center the overflow, so a wide image
+   bleeds evenly past the column. min() keeps anything narrower than the
+   column exactly where it is today (so text-align from the align tools
+   still places it; alignment is inert for overflow-wide inline content,
+   the browser start-aligns it, so the margin never fights it), and the
+   max() arm stops the slide at the pane edge when the written width is
+   larger than the pane. */
+@supports (margin-left: min(0px, calc((100% - attr(width px)) / 2))) {
+	.markdown-source-view.mod-cm6 .image-embed[width],
+	.markdown-preview-view .image-embed[width] {
+		max-width: calc(100% + 2 * var(--ped-img-bleed, 0px));
+		margin-left: min(0px, max(calc((100% - attr(width px)) / 2), calc(-1 * var(--ped-img-bleed, 0px))));
+	}
+
+	.markdown-source-view.mod-cm6 img[width]:not([class], .image-embed[width] img),
+	.markdown-preview-view img[width]:not([class], .image-embed[width] img) {
+		max-width: calc(100% + 2 * var(--ped-img-bleed, 0px));
+		margin-left: min(0px, max(calc((100% - attr(width px)) / 2), calc(-1 * var(--ped-img-bleed, 0px))));
+	}
+}
+
+/* ---------- line spacing ---------- */
+
+body.ped-lh-compact .markdown-source-view.mod-cm6 .cm-content,
+body.ped-lh-compact .markdown-preview-view {
+	line-height: 1.35;
+}
+
+body.ped-lh-relaxed .markdown-source-view.mod-cm6 .cm-content,
+body.ped-lh-relaxed .markdown-preview-view {
+	line-height: 1.85;
+}
+
+/* ---------- block gap ----------
+   The space under a heading, and around a table, is not padding or margin
+   in Live Preview — Obsidian gives .cm-line "padding: 0" and derives the
+   heading's own gap from --p-spacing, which only covers the space ABOVE
+   it (--p-spacing-empty, the one below, is 0). What you actually see is
+   the blank source line: a real editor line at a full line-height, which
+   no Obsidian variable can reach.
+
+   Markdown needs that blank line — a table loses its header without one —
+   so it cannot simply be deleted. Shrinking it is the only lever, and
+   font-size will not do it because the inherited line-height is a fixed
+   length. Setting line-height on the line itself does.
+
+   An empty line is exactly "<br>", which is how :has() finds it, and the
+   same test Obsidian's own stylesheet uses. Type on the line and the br
+   is gone, the rule stops matching, and the line returns to full height
+   by itself. Verified against the live DOM: a table widget is a direct
+   child of .cm-content carrying both cm-embed-block and cm-table-widget,
+   with a blank .cm-line on each side. */
+
+/* Headings and tables are separate settings, so they carry separate
+   classes and variables: turning one off leaves the other alone. */
+
+body.ped-heading-gap .markdown-source-view.mod-cm6.is-live-preview .cm-line.HyperMD-header + .cm-line:has(> br:only-child) {
+	line-height: var(--ped-heading-gap, 12px);
+}
+
+/* A table has a blank line on BOTH sides and Markdown needs both, so the
+   one before it gets the same treatment as the one after. */
+body.ped-table-gap .markdown-source-view.mod-cm6.is-live-preview .cm-table-widget + .cm-line:has(> br:only-child),
+body.ped-table-gap .markdown-source-view.mod-cm6.is-live-preview .cm-line:has(> br:only-child):has(+ .cm-table-widget) {
+	line-height: var(--ped-table-gap, 12px);
+}
+
+/* The widget's own 16px of bottom padding stacks on top of that blank
+   line. It is the room the row drag handles need, so it shrinks with the
+   setting but never below 6px, and the top is left alone. */
+body.ped-table-gap .markdown-source-view.mod-cm6 .cm-table-widget {
+	padding-bottom: max(6px, var(--ped-table-gap, 12px));
+}
+
+/* A heading immediately followed by a table: the blank line between them
+   is both "under a heading" and "before a table". The heading setting
+   wins, so every heading sits the same distance from what it introduces
+   whether that is a paragraph, a list, or a table. Scoped to both classes
+   because with headings off the table setting should still apply here. */
+body.ped-heading-gap.ped-table-gap .markdown-source-view.mod-cm6.is-live-preview .cm-line.HyperMD-header + .cm-line:has(> br:only-child):has(+ .cm-table-widget) {
+	line-height: var(--ped-heading-gap, 12px);
+}
+
+/* ---------- settings: a search box, then a tab bar, so the long options list is grouped ---------- */
+
+.ped-settings-search {
+	margin: 4px 0 10px;
+}
+
+.ped-settings-search-input {
+	width: 100%;
+}
+
+.ped-settings-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 2px;
+	margin: 2px 0 18px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+/* the compound selector outranks Obsidian's own settings-area button chrome
+   (a .vertical-tab-content button rule) so the tabs render flat, not as boxes */
+.ped-settings-tabs button.ped-settings-tab,
+.ped-settings-tabs button.ped-settings-tab:hover,
+.ped-settings-tabs button.ped-settings-tab:focus,
+.ped-settings-tabs button.ped-settings-tab:focus-visible,
+.ped-settings-tabs button.ped-settings-tab:active {
+	background: transparent;
+	border: none;
+	border-radius: 0;
+	box-shadow: none;
+	outline: none;
+	margin: 0 0 -1px 0;
+	padding: 7px 14px;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-medium);
+	border-bottom: 2px solid transparent;
+	cursor: default;
+	transition: color 120ms ease, border-color 120ms ease;
+}
+
+.ped-settings-tabs button.ped-settings-tab:hover {
+	color: var(--text-normal);
+	border-bottom-color: var(--background-modifier-border-hover);
+}
+
+.ped-settings-tabs button.ped-settings-tab.is-active {
+	color: var(--text-accent);
+	font-weight: var(--font-semibold);
+	border-bottom-color: var(--interactive-accent);
+}
+
+/* the first heading inside a tab does not need its big top border */
+.ped-settings-section:first-child .setting-item-heading {
+	border-top: none;
+	padding-top: 0;
+}
+
+/* a small help icon after each setting name */
+.ped-setting-help {
+	display: inline-flex;
+	margin-left: 6px;
+	vertical-align: -3px;
+	color: var(--text-muted);
+	cursor: help;
+}
+
+.ped-setting-help:hover {
+	color: var(--text-muted);
+}
+
+.ped-setting-help .svg-icon {
+	width: 14px;
+	height: 14px;
+}
+
+/* the help popover: a soft theme-colored card instead of the native black
+   tooltip; shows on hover, and a click pins it open */
+.ped-help-pop {
+	position: fixed;
+	z-index: var(--layer-tooltip);
+	max-width: 340px;
+	padding: 8px 11px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	box-shadow: var(--shadow-s);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: 1.45;
+}
+
+/* ---------- settings: custom AI action rows ---------- */
+
+.ped-aiaction-row textarea {
+	min-width: 260px;
+	min-height: 54px;
+}
+
+/* ---------- slash suggestions ---------- */
+
+.ped-slash {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.ped-slash-icon {
+	display: flex;
+	align-items: center;
+	color: var(--text-muted);
+}
+
+.ped-slash-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
+/* ---------- toggle blocks ----------
+   A folded [!toggle] callout styled as a bare Notion-style toggle: no tint,
+   no icon, just the fold chevron, a bold title, and a rule down the content. */
+
+.callout[data-callout="toggle"] {
+	--callout-color: 128, 128, 128;
+	background: transparent;
+	border: none;
+	padding: 2px 0;
+}
+
+.callout[data-callout="toggle"] > .callout-title {
+	color: var(--text-normal);
+	padding: 0;
+	gap: 4px;
+}
+
+.callout[data-callout="toggle"] > .callout-title .callout-icon {
+	display: none;
+}
+
+.callout[data-callout="toggle"] > .callout-content {
+	border-left: 2px solid var(--background-modifier-border);
+	margin: 4px 0 0 7px;
+	padding: 0 0 0 12px;
+}
+
+/* ---------- emoji picker ---------- */
+
+.ped-emoji {
+	position: fixed;
+	z-index: var(--layer-menu, 999);
+	width: 328px;
+	max-height: 320px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border-hover);
+	border-radius: 8px;
+	box-shadow: var(--shadow-s), 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.ped-emoji input {
+	width: 100%;
+	height: 28px;
+	font-size: 13px;
+}
+
+.ped-emoji-grid {
+	overflow-y: auto;
+	display: grid;
+	grid-template-columns: repeat(8, 1fr);
+	gap: 2px;
+}
+
+.ped-emoji-grid button {
+	height: 34px;
+	font-size: 19px;
+	padding: 0;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	border-radius: 6px;
+	cursor: pointer;
+	line-height: 1;
+}
+
+.ped-emoji-grid button:hover {
+	background: var(--background-modifier-hover);
+}
+
+/* ---------- image toolbar ---------- */
+
+.ped-imgbar {
+	position: fixed;
+	z-index: var(--layer-menu, 999);
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 4px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border-hover);
+	border-radius: 8px;
+	box-shadow: var(--shadow-s), 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.ped-imgbar .ped-sep {
+	width: 1px;
+	height: 18px;
+	background: var(--background-modifier-border);
+	margin: 0 3px;
+}
+
+input.ped-prompt-input {
+	width: 100%;
+	font-size: 13px;
+	padding: 6px 8px;
+}
+
+.ped-prompt-btns {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+/* ---------- the lead-in converter ----------
+   A vault-wide rewrite gets read before it runs: every line it would touch is
+   listed, grouped by note, with the flavor each one becomes. */
+
+.ped-convert-intro {
+	margin: 0 0 10px;
+	color: var(--text-muted);
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.ped-convert-summary {
+	font-size: 13px;
+	font-weight: 500;
+	margin: 10px 0 6px;
+}
+
+.ped-convert-list {
+	max-height: 320px;
+	overflow-y: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 8px 10px;
+	background: var(--background-secondary);
+}
+
+.ped-convert-file + .ped-convert-file {
+	margin-top: 10px;
+}
+
+.ped-convert-path {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-normal);
+	overflow-wrap: anywhere;
+}
+
+.ped-convert-row {
+	display: flex;
+	gap: 6px;
+	align-items: baseline;
+	font-size: 12px;
+	color: var(--text-muted);
+	padding-left: 8px;
+}
+
+.ped-convert-line {
+	overflow-wrap: anywhere;
+}
+
+/* ---------- Notion-style toggle lists ----------
+   Obsidian already folds list items with children; these rules make that read
+   like Notion: the fold chevron is always visible and stands in for the
+   bullet on foldable items. Scoped to items that actually have children. */
+
+.markdown-source-view .HyperMD-list-line .list-collapse-indicator {
+	opacity: 1;
+}
+
+.markdown-source-view .HyperMD-list-line:has(.list-collapse-indicator) .list-bullet::after {
+	display: none;
+}
+
+.markdown-rendered li .list-collapse-indicator {
+	opacity: 1;
+}
+
+.markdown-rendered li:has(> .list-collapse-indicator)::marker {
+	content: "";
+}
+
+/* ---------- Notion-style callouts ----------
+   Soft tint from the type color, an accent bar down the edge so the block
+   reads as a callout and not a quote, normal-weight text, and the emoji
+   written into the title as the icon. Toggle blocks keep their own bare
+   skin; the fold chevron stays. */
+
+.callout:not([data-callout="toggle"]) {
+	background: color-mix(in srgb, rgb(var(--callout-color)) 8%, var(--background-secondary));
+	border-radius: 8px;
+	border-inline-start: 3px solid rgb(var(--callout-color));
+	padding: 12px 14px;
+	mix-blend-mode: normal;
+}
+
+.callout:not([data-callout="toggle"]) > .callout-title {
+	color: var(--text-normal);
+	gap: 8px;
+	align-items: center;
+}
+
+/* the emoji stands in for the type's icon, so the built-in badge only steps
+   aside on callouts that carry one — a hand-typed `> [!tip]` keeps its
+   lightbulb instead of rendering as a bare tinted box */
+.callout.ped-emoji-icon:not([data-callout="toggle"]) > .callout-title .callout-icon {
+	display: none;
+}
+
+/* the editor's callout presentations can place the icon in its own slot
+   outside .callout > .callout-title (a clickable chip); collapse the whole
+   container wherever Obsidian puts it, not just the svg inside */
+.markdown-source-view.mod-cm6 .cm-callout.ped-emoji-icon .callout-icon {
+	display: none;
+}
+
+/* the fallback badge takes the type's color at a size that matches the emoji */
+.callout:not([data-callout="toggle"]) > .callout-title .callout-icon {
+	color: rgb(var(--callout-color));
+	display: flex;
+	align-items: center;
+}
+
+.callout:not([data-callout="toggle"]) > .callout-title .callout-icon svg {
+	width: 18px;
+	height: 18px;
+}
+
+/* a tip is a lightbulb, not a flame — Obsidian's default reads as "hot take".
+   The alias types land on the same callout, so they get the same bulb. */
+.callout[data-callout="tip"],
+.callout[data-callout="hint"],
+.callout[data-callout="important"] {
+	--callout-icon: lucide-lightbulb;
+}
+
+.callout:not([data-callout="toggle"]) > .callout-title .callout-title-inner {
+	font-weight: 500;
+}
+
+/* the leading emoji on a rendered callout is the Notion icon: clickable */
+.ped-callout-emoji {
+	cursor: pointer;
+	border-radius: 5px;
+	padding: 0 3px;
+	margin-right: 2px;
+	font-size: 1.1em;
+	line-height: 1.2;
+}
+
+.ped-callout-emoji:hover {
+	background: var(--background-modifier-hover);
+}
+
+/* ---------- to-do dashboards ----------
+   A `todo` code block renders a live query over every checklist in the
+   vault: working checkboxes, due chips (overdue in red), recurrence hints,
+   and a muted source-note link pinned to the right. */
+
+.ped-todo {
+	padding: 2px 0;
+}
+
+.ped-todo-h {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	margin: 10px 0 4px;
+}
+
+.ped-todo-item {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 3px 0;
+}
+
+.ped-todo-item .ped-todo-box {
+	cursor: pointer;
+	transform: translateY(2px);
+}
+
+.ped-todo-item.is-done .ped-todo-text {
+	color: var(--text-muted);
+	text-decoration: line-through;
+}
+
+.ped-todo-due,
+.ped-todo-recur {
+	font-size: 12px;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+/* the due chip is the snooze control: tap for today/tomorrow/next week/pick */
+.ped-todo-due {
+	cursor: pointer;
+	border-radius: 5px;
+	padding: 0 4px;
+}
+
+.ped-todo-due:hover {
+	background: var(--background-modifier-hover);
+}
+
+.ped-todo-due.is-empty {
+	opacity: 0;
+}
+
+.ped-todo-item:hover .ped-todo-due.is-empty {
+	opacity: 0.6;
+}
+
+.ped-todo-due.is-overdue {
+	color: var(--text-error);
+	font-weight: 600;
+}
+
+.ped-todo-src {
+	margin-inline-start: auto;
+	font-size: 12px;
+	color: var(--text-muted);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+.ped-todo-src:hover {
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+.ped-todo-error {
+	color: var(--text-error);
+	font-size: 13px;
+}
+
+.ped-todo-empty {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+/* the Today sidebar pane shares the dashboard row styles */
+.ped-today {
+	padding: 8px 12px;
+	overflow-y: auto;
+}
+
+/* week view: seven columns, chips drag across days to reschedule */
+.ped-week {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 6px;
+}
+
+.ped-week-day {
+	min-height: 110px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	padding: 6px;
+}
+
+.ped-week-day.is-today {
+	border-color: var(--interactive-accent);
+	background: color-mix(in srgb, var(--interactive-accent) 5%, transparent);
+}
+
+.ped-week-day.is-dragover {
+	background: var(--background-modifier-hover);
+	border-color: var(--interactive-accent);
+}
+
+.ped-week-h {
+	font-size: 11px;
+	font-weight: 600;
+	color: var(--text-muted);
+	margin-bottom: 6px;
+}
+
+.ped-week-day.is-today .ped-week-h {
+	color: var(--interactive-accent);
+}
+
+.ped-week-chip {
+	font-size: 12px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	padding: 3px 6px;
+	margin-bottom: 4px;
+	cursor: grab;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ped-week-chip.is-done {
+	text-decoration: line-through;
+	color: var(--text-muted);
+}
+
+@media (max-width: 700px) {
+	.ped-week {
+		grid-template-columns: 1fr;
+	}
+	.ped-week-day {
+		min-height: 0;
+	}
+}
+
+/* ---------- Notion-style covers ----------
+   A banner declared in frontmatter (cover / cover-y). The element sits at
+   the top of the sizer and scrolls with the note; hover reveals the
+   change / reposition / remove controls. */
+
+.ped-has-cover {
+	position: relative;
+	padding-top: 236px !important;
+}
+
+.ped-cover {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 220px;
+	overflow: hidden;
+	background-size: cover;
+	background-position: center;
+	border-radius: 0 0 4px 4px;
+}
+
+.ped-cover-img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.ped-cover.is-repositioning {
+	cursor: ns-resize;
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: -2px;
+}
+
+.ped-cover.is-repositioning .ped-cover-img {
+	pointer-events: none;
+}
+
+/* banner heights (standard is the default above) */
+.ped-has-cover.ped-h-short {
+	padding-top: 136px !important;
+}
+.ped-has-cover.ped-h-short .ped-cover {
+	height: 120px;
+}
+.ped-has-cover.ped-h-tall {
+	padding-top: 376px !important;
+}
+.ped-has-cover.ped-h-tall .ped-cover {
+	height: 360px;
+}
+
+/* a soft scrim under an image cover keeps the buttons and any title readable */
+.ped-cover:has(.ped-cover-img)::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background: linear-gradient(to bottom, transparent 55%, rgba(0, 0, 0, 0.28) 100%);
+}
+
+.ped-cover-bar {
+	position: absolute;
+	right: 10px;
+	bottom: 10px;
+	display: flex;
+	gap: 4px;
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+
+.ped-cover:hover .ped-cover-bar {
+	opacity: 1;
+}
+
+.ped-cover-btn {
+	font-size: 12px;
+	padding: 3px 8px;
+	border-radius: 5px;
+	border: none;
+	background: rgba(0, 0, 0, 0.45);
+	color: #fff;
+	cursor: pointer;
+	box-shadow: none;
+}
+
+.ped-cover-btn:hover {
+	background: rgba(0, 0, 0, 0.65);
+}
+
+.is-mobile .ped-has-cover {
+	padding-top: 156px !important;
+}
+
+.is-mobile .ped-cover {
+	height: 140px;
+}
+
+.is-mobile .ped-cover-bar {
+	opacity: 1;
+}
+
+.is-mobile .ped-has-cover.ped-h-short {
+	padding-top: 106px !important;
+}
+.is-mobile .ped-has-cover.ped-h-short .ped-cover {
+	height: 90px;
+}
+.is-mobile .ped-has-cover.ped-h-tall {
+	padding-top: 236px !important;
+}
+.is-mobile .ped-has-cover.ped-h-tall .ped-cover {
+	height: 220px;
+}
+
+/* ---------- the visual cover picker modal ---------- */
+.ped-cover-modal .ped-cover-sect {
+	font-size: var(--font-ui-smaller);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-muted);
+	margin: 15px 0 7px;
+}
+.ped-cover-modal .ped-cover-sect:first-child {
+	margin-top: 2px;
+}
+.ped-cover-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+	gap: 8px;
+}
+.ped-cover-swatch {
+	aspect-ratio: 16 / 10;
+	border-radius: 6px;
+	background-size: cover;
+	background-position: center;
+	cursor: pointer;
+	border: 2px solid transparent;
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+	transition: transform 100ms ease;
+}
+.ped-cover-swatch:hover {
+	transform: scale(1.07);
+}
+.ped-cover-swatch.is-active {
+	border-color: var(--interactive-accent);
+}
+.ped-cover-actions {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.ped-cover-action {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	cursor: pointer;
+}
+.ped-cover-action-icon {
+	display: inline-flex;
+}
+.ped-cover-action-icon .svg-icon {
+	width: 16px;
+	height: 16px;
+}
+.ped-cover-heights {
+	display: flex;
+	gap: 6px;
+}
+.ped-cover-heights button.ped-cover-height {
+	cursor: pointer;
+}
+.ped-cover-heights button.ped-cover-height.is-active {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+.ped-cover-foot {
+	display: flex;
+	justify-content: space-between;
+	margin-top: 20px;
+}
+.ped-cover-foot button {
+	cursor: pointer;
+}
+
+/* ---------- Notion-style page icons ---------- */
+
+.ped-page-icon {
+	font-size: 2.4em;
+	line-height: 1.1;
+	width: fit-content;
+	cursor: pointer;
+	border-radius: 8px;
+	padding: 2px 6px;
+	margin: 4px 0 0 -6px;
+	user-select: none;
+}
+
+.ped-page-icon:hover {
+	background: var(--background-modifier-hover);
+}
+
+/* ---------- last-edited stamp ----------
+   1Password-style: a quiet line under the title you can glance at and
+   otherwise ignore. Click swaps the relative time for the exact one. */
+
+.ped-edited {
+	font-size: 0.78em;
+	color: var(--text-muted);
+	width: fit-content;
+	cursor: pointer;
+	user-select: none;
+	border-radius: 5px;
+	padding: 1px 5px;
+	margin: 0 0 0 -5px;
+	transition: color 120ms ease, background 120ms ease;
+}
+
+.ped-edited:hover {
+	color: var(--text-muted);
+	background: var(--background-modifier-hover);
+}
+
+.ped-edited.is-exact {
+	color: var(--text-muted);
+}
+
+/* the stamp belongs to the title block, so it moves with a cover */
+.markdown-source-view .ped-edited.is-title {
+	margin-bottom: 2px;
+}
+
+/* Pulled tight under the title with a hairline drawn between the two, so the
+   title and the date read as one page header instead of as two loose lines
+   floating above the first paragraph. The rule is the stamp's own top border
+   rather than a border on the title: it then travels with the stamp, and a
+   title that wraps to two lines cannot leave the line stranded. The title's
+   own bottom gap is closed only when this stamp actually follows it. */
+.inline-title:has(+ .ped-edited.is-rule) {
+	margin-bottom: 0;
+}
+
+/* The gap below has to hold the note's first block off the header. Prose
+   brings no top spacing of its own, so the margin is all there is; a heading
+   brings plenty, and .is-tight (set by the plugin when the note opens on one)
+   gets out of its way rather than stacking on top of it. */
+.ped-edited.is-title.is-rule {
+	width: 100%;
+	max-width: 100%;
+	margin: 4px 0 10px;
+	padding: 5px 0 0;
+	border-top: 1px solid var(--background-modifier-border);
+	border-radius: 0;
+}
+
+.ped-edited.is-title.is-rule.is-tight {
+	margin-bottom: 2px;
+}
+
+/* full-width hover fill would read as a selected row, so the rule variant
+   brightens the text alone, the way the footer one does */
+.ped-edited.is-title.is-rule:hover {
+	background: transparent;
+	color: var(--text-muted);
+}
+
+/* At the end of the note it needs to read as a footer rather than as more
+   content, so it takes a hairline above it and sits clear of the last
+   paragraph. It lives in .cm-sizer, so it scrolls with the note. */
+.ped-edited.is-bottom {
+	margin: 24px 0 8px;
+	padding-top: 8px;
+	border-top: 1px solid var(--background-modifier-border);
+	border-radius: 0;
+	width: 100%;
+	max-width: 100%;
+}
+
+.ped-edited.is-bottom:hover {
+	background: transparent;
+	color: var(--text-muted);
+}
+
+/* ---------- board view + toc + comments pane ---------- */
+
+.ped-board {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 6px;
+}
+
+.ped-board-col {
+	min-height: 90px;
+}
+
+.ped-toc {
+	border-inline-start: 2px solid var(--background-modifier-border);
+	padding: 2px 0 2px 14px;
+	margin: 4px 0;
+}
+
+.ped-toc-title {
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	color: var(--text-muted);
+	margin-bottom: 4px;
+}
+
+.ped-toc-item {
+	font-size: 13.5px;
+	color: var(--text-muted);
+	cursor: pointer;
+	padding: 1px 0;
+}
+
+.ped-toc-item:hover {
+	color: var(--text-accent);
+	text-decoration: underline;
+}
+
+.ped-comments {
+	padding: 8px 12px;
+	overflow-y: auto;
+}
+
+.ped-comment-row {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.ped-comment-rowmain {
+	flex: 1;
+	cursor: pointer;
+	min-width: 0;
+}
+
+.ped-comment-rowmain:hover .ped-comment-text {
+	color: var(--text-accent);
+}
+
+button.ped-comment-resolve {
+	font-size: 11.5px;
+	padding: 2px 8px;
+	flex-shrink: 0;
+}
+
+/* ---------- Notion-style comments ----------
+   %%💬 …%% markers render as chips in Live Preview; reading view naturally
+   omits them. The popover reads, edits, or resolves. */
+
+.ped-comment-chip {
+	display: inline-flex;
+	align-items: center;
+	vertical-align: text-bottom;
+	padding: 1px 4px;
+	border-radius: 5px;
+	background: rgba(255, 204, 0, 0.18);
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.ped-comment-chip:hover {
+	background: rgba(255, 204, 0, 0.35);
+	color: var(--text-normal);
+}
+
+.ped-comment-chip svg {
+	width: 13px;
+	height: 13px;
+}
+
+.ped-comment-pop {
+	position: fixed;
+	z-index: var(--layer-menu, 999);
+	width: 280px;
+	padding: 10px 12px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border-hover);
+	border-radius: 8px;
+	box-shadow: var(--shadow-s), 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.ped-comment-text {
+	font-size: 13.5px;
+	white-space: pre-wrap;
+}
+
+.ped-comment-stamp {
+	font-size: 11.5px;
+	color: var(--text-muted);
+	margin-top: 4px;
+}
+
+.ped-comment-btns {
+	display: flex;
+	justify-content: flex-end;
+	gap: 6px;
+	margin-top: 10px;
+}
+
+/* ---------- Notion-style verification ----------
+   The header badge: green while valid, amber once expired. */
+
+.ped-verify {
+	font-size: 11.5px;
+	font-weight: 600;
+	padding: 1px 8px;
+	border-radius: 10px;
+	margin-inline-start: 8px;
+	cursor: pointer;
+	white-space: nowrap;
+	align-self: center;
+}
+
+.ped-verify.is-verified {
+	color: var(--color-green, #2e7d32);
+	background: rgba(0, 160, 70, 0.12);
+}
+
+.ped-verify.is-expired {
+	color: var(--color-orange, #b45309);
+	background: rgba(220, 140, 0, 0.14);
+}
+
+/* ---------- quick-capture mobile toolbar ----------
+   Obsidian's above-keyboard toolbar carries the plugin's command set (set by
+   the plugin on mobile); this skin makes it a flat strip on the page
+   background with a hairline top edge, dark icons, and the keyboard-dismiss
+   pinned right behind its own divider. */
+
+body.ped-mobile-bar .mobile-toolbar {
+	background: var(--background-primary);
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+body.ped-mobile-bar .mobile-toolbar-options-list-container {
+	border-radius: 0;
+}
+
+body.ped-mobile-bar .mobile-toolbar-options-list {
+	background: var(--background-primary);
+}
+
+body.ped-mobile-bar .mobile-toolbar-option {
+	color: var(--text-normal);
+}
+
+body.ped-mobile-bar .mobile-toolbar-option:last-child {
+	margin-inline-start: auto;
+	border-inline-start: 1px solid var(--background-modifier-border);
+}
+
+/* ---------- Notion-style tabs ---------- */
+
+/* the tabs/columns widgets draw their own frame; drop the editor's bold
+   code-block border around them so there's just one, not two nested ones.
+   !important because Obsidian re-adds the border/shadow on hover. */
+.markdown-source-view.mod-cm6 .cm-embed-block:has(.ped-tabs),
+.markdown-source-view.mod-cm6 .cm-embed-block:has(.ped-columns) {
+	border: none !important;
+	box-shadow: none !important;
+	padding: 0 !important;
+	background: transparent !important;
+}
+
+.ped-tabs {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 10px;
+	overflow: hidden;
+	margin: 4px 0;
+}
+
+.ped-tabstrip {
+	display: flex;
+	gap: 4px;
+	padding: 8px 10px 7px;
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+button.ped-tab {
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	padding: 4px 12px;
+	border-radius: 16px;
+	font-size: 13.5px;
+	font-weight: 600;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+button.ped-tab:hover {
+	color: var(--text-normal);
+}
+
+button.ped-tab.is-active {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.ped-tab-add {
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	padding: 4px 10px;
+	border-radius: 16px;
+	font-size: 15px;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.ped-tab-add:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+.ped-tab-rename {
+	padding: 3px 10px;
+	border-radius: 16px;
+	font-size: 13.5px;
+	font-weight: 600;
+	max-width: 12em;
+}
+
+.ped-tabpane {
+	padding: 6px 16px 12px;
+}
+
+/* rendered content sits flush at the pane top so it lines up with the edit
+   box — otherwise the first paragraph's top margin makes the text jump up
+   when you click in to edit */
+.ped-tabpane > :first-child {
+	margin-top: 0;
+}
+
+.ped-tabpane > :last-child {
+	margin-bottom: 0;
+}
+
+/* the click-to-edit textarea reads like the pane it replaces */
+textarea.ped-tab-edit {
+	width: 100%;
+	min-height: 1.5em;
+	border: none;
+	background: transparent;
+	resize: none;
+	padding: 0;
+	margin: 0;
+	font: inherit;
+	color: var(--text-normal);
+	line-height: var(--line-height-normal);
+}
+
+textarea.ped-tab-edit:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+.ped-tab-empty {
+	color: var(--text-muted);
+	font-style: italic;
+	cursor: text;
+}
+
+/* the embedded real editor inside a pane: neutralize the full-view layout
+   that .markdown-source-view normally carries and let it size to content */
+.ped-tabpane.ped-tab-cm {
+	display: block;
+	min-height: 2.4em;
+	background: transparent;
+}
+
+.ped-tabpane.ped-tab-cm .cm-editor {
+	background: transparent;
+}
+
+.ped-tabpane.ped-tab-cm .cm-scroller {
+	overflow: visible;
+	padding: 0;
+}
+
+.ped-tabpane.ped-tab-cm .cm-sizer {
+	padding: 0 !important;
+	margin: 0 !important;
+	max-width: none !important;
+	min-height: 0 !important;
+}
+
+.ped-tabpane.ped-tab-cm .cm-content {
+	padding: 0;
+}
+
+.ped-tab-hidden {
+	display: none;
+}
+
+/* ---------- Notion-style columns ---------- */
+
+.ped-columns {
+	display: flex;
+	gap: 24px;
+	margin: 4px 0;
+}
+
+.ped-column {
+	flex: 1 1 0;
+	min-width: 0;
+}
+
+body.is-mobile .ped-columns {
+	flex-direction: column;
+	gap: 8px;
+}
+
+/* ---------- live, editable columns ---------- */
+.ped-columns-live {
+	gap: 0;
+	align-items: stretch;
+}
+.ped-columns-live .ped-column {
+	position: relative;
+	min-width: 90px;
+	padding: 0 8px;
+}
+.ped-col-pane {
+	min-height: 44px;
+}
+.ped-col-divider {
+	flex: 0 0 12px;
+	align-self: stretch;
+	position: relative;
+	cursor: col-resize;
+}
+.ped-col-divider::after {
+	content: "";
+	position: absolute;
+	top: 6px;
+	bottom: 6px;
+	left: 50%;
+	width: 2px;
+	transform: translateX(-50%);
+	background: var(--background-modifier-border);
+	border-radius: 2px;
+	transition: background 100ms ease;
+}
+.ped-col-divider:hover::after,
+.ped-col-divider.is-dragging::after {
+	background: var(--interactive-accent);
+}
+.ped-col-remove {
+	position: absolute;
+	top: 2px;
+	right: 4px;
+	z-index: 2;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border: none;
+	border-radius: 4px;
+	background: var(--background-secondary);
+	color: var(--text-muted);
+	box-shadow: none;
+	opacity: 0;
+	cursor: pointer;
+}
+.ped-columns-live .ped-column:hover .ped-col-remove {
+	opacity: 0.7;
+}
+.ped-col-remove:hover {
+	opacity: 1 !important;
+	color: var(--text-normal);
+}
+.ped-col-remove .svg-icon {
+	width: 13px;
+	height: 13px;
+}
+.ped-col-add {
+	flex: 0 0 26px;
+	align-self: stretch;
+	min-height: 44px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text-muted);
+	border-radius: 6px;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 100ms ease, background 100ms ease;
+}
+.ped-columns-live:hover .ped-col-add {
+	opacity: 1;
+}
+.ped-col-add:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+.ped-col-add .svg-icon {
+	width: 16px;
+	height: 16px;
+}
+
+/* ---------- per-note page options: width, font, cover overlay ---------- */
+.ped-full-width .cm-sizer,
+.ped-full-width .markdown-preview-sizer {
+	max-width: none !important;
+}
+.ped-font-serif .cm-content,
+.ped-font-serif .markdown-preview-view {
+	font-family: Georgia, Cambria, "Times New Roman", serif;
+}
+.ped-font-mono .cm-content,
+.ped-font-mono .markdown-preview-view {
+	font-family: var(--font-monospace);
+}
+
+/* title floated onto the cover: pull the icon and title up over the banner,
+   with a scrim and light text so they read on any cover */
+.ped-cover-overlay .ped-cover::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background: linear-gradient(to bottom, transparent 40%, rgba(0, 0, 0, 0.38) 100%);
+}
+.ped-cover-overlay .ped-has-cover .ped-page-icon {
+	position: relative;
+	z-index: 1;
+	margin-top: -80px;
+	filter: drop-shadow(0 1px 5px rgba(0, 0, 0, 0.6));
+}
+.ped-cover-overlay .ped-has-cover .inline-title {
+	position: relative;
+	z-index: 1;
+	color: #fff;
+	text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55);
+}
+
+/* ---------- code blocks as cards ----------
+   Obsidian renders a fenced block as plain tinted lines with no edges. These
+   give it a border and rounded corners, put the language name on the opening
+   fence, and hang a Copy button off it. Both the chip and the button are
+   CodeMirror decorations on the fence line, so the file stays plain Markdown
+   and nothing is written into the note. */
+
+.markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock {
+	background: var(--code-background, var(--background-secondary));
+	border-inline: 1px solid var(--background-modifier-border);
+	padding-inline: var(--size-4-4);
+	font-size: 0.9em;
+}
+
+.markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock-begin {
+	border-top: 1px solid var(--background-modifier-border);
+	border-radius: 8px 8px 0 0;
+	padding-top: 6px;
+}
+
+.markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock-end {
+	border-bottom: 1px solid var(--background-modifier-border);
+	border-radius: 0 0 8px 8px;
+	padding-bottom: 6px;
+}
+
+
+.ped-cb-copy {
+	position: absolute;
+	right: 8px;
+	top: 3px;
+	height: 20px;
+	padding: 0 7px;
+	font-family: var(--font-interface);
+	font-size: 11px;
+	line-height: 1;
+	color: var(--text-muted);
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 5px;
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 120ms ease, color 120ms ease;
+}
+
+/* stays out of the way until you go near the block */
+.markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock:hover .ped-cb-copy,
+.markdown-source-view.mod-cm6 .cm-line.ped-cb-head:hover .ped-cb-copy,
+.ped-cb-copy:focus-visible {
+	opacity: 1;
+}
+
+.ped-cb-copy:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+.ped-cb-copy.is-done {
+	color: var(--text-success, var(--text-accent));
+}
+
+/* Reading view, so the two do not drift apart */
+.markdown-rendered pre {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+}
+
+/* ---------- code block header ----------
+   One row on the opening fence: the language as a dropdown button, then Copy.
+   Obsidian renders its own `code-block-flair` label for the language too, and
+   two labels for the same thing is what made them collide, so its copy is
+   hidden here and ours — which is clickable — is the one that shows. */
+
+.markdown-source-view.mod-cm6 .cm-line.ped-cb-head .code-block-flair {
+	display: none;
+}
+
+.markdown-source-view.mod-cm6 .cm-line.ped-cb-head {
+	position: relative;
+}
+
+.ped-cb-lang,
+.ped-cb-copy {
+	position: absolute;
+	top: 3px;
+	height: 21px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 7px;
+	font-family: var(--font-interface);
+	font-size: 11px;
+	line-height: 1;
+	color: var(--text-muted);
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 5px;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: opacity 120ms ease, color 120ms ease;
+}
+
+/* Copy is pinned to the right; the language button sits to its left, sized to
+   its own text rather than a guessed offset, so a long name cannot overlap it */
+.ped-cb-copy {
+	right: 8px;
+	opacity: 0;
+}
+
+.ped-cb-lang {
+	right: 62px;
+	opacity: 0.75;
+}
+
+.ped-cb-caret {
+	font-size: 9px;
+	opacity: 0.7;
+}
+
+.markdown-source-view.mod-cm6 .cm-line.ped-cb-head:hover .ped-cb-copy,
+.markdown-source-view.mod-cm6 .cm-line.ped-cb-head:hover .ped-cb-lang,
+.ped-cb-copy:focus-visible,
+.ped-cb-lang:focus-visible {
+	opacity: 1;
+}
+
+.ped-cb-lang:hover,
+.ped-cb-copy:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+	opacity: 1;
+}
+
+.ped-cb-copy.is-done {
+	color: var(--text-success, var(--text-accent));
+}
+
+/* ---------- language picker ----------
+   Notion's dropdown: a search box over every language, arrow keys, Enter. */
+
+.ped-langpop {
+	position: fixed;
+	z-index: var(--layer-menu, 999);
+	width: 260px;
+	max-height: 340px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border-hover);
+	border-radius: 8px;
+	box-shadow: var(--shadow-s), 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+input.ped-langpop-search {
+	width: 100%;
+	height: 28px;
+	font-size: 13px;
+}
+
+.ped-langpop-list {
+	overflow-y: auto;
+}
+
+.ped-langpop-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 5px 8px;
+	border-radius: 5px;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.ped-langpop-row:hover,
+.ped-langpop-row.is-active {
+	background: var(--background-modifier-hover);
+}
+
+.ped-langpop-check {
+	color: var(--text-accent);
+}
+
+/* Token colors. Only applied inside a fenced block, so inline code and the
+   rest of the editor keep the theme's own colors. */
+/* the active line inside a block must not flash the theme's light highlight */
+/* Reading view, kept in step */
+
+
+
+/* ---------- code block header ----------
+   One row on the opening fence: the language as a dropdown button, then Copy.
+   Obsidian renders its own `code-block-flair` label for the language too, and
+   two labels for the same thing is what made them collide, so its copy is
+   hidden here and ours — which is clickable — is the one that shows. */
+
+.markdown-source-view.mod-cm6 .cm-line.ped-cb-head .code-block-flair {
+	display: none;
+}
+
+.markdown-source-view.mod-cm6 .cm-line.ped-cb-head {
+	position: relative;
+}
+
+.ped-cb-lang,
+.ped-cb-copy {
+	position: absolute;
+	top: 3px;
+	height: 21px;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0 7px;
+	font-family: var(--font-interface);
+	font-size: 11px;
+	line-height: 1;
+	color: var(--text-muted);
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 5px;
+	cursor: pointer;
+	white-space: nowrap;
+	transition: opacity 120ms ease, color 120ms ease;
+}
+
+/* Copy is pinned to the right; the language button sits to its left, sized to
+   its own text rather than a guessed offset, so a long name cannot overlap it */
+.ped-cb-copy {
+	right: 8px;
+	opacity: 0;
+}
+
+.ped-cb-lang {
+	right: 62px;
+	opacity: 0.75;
+}
+
+.ped-cb-caret {
+	font-size: 9px;
+	opacity: 0.7;
+}
+
+.markdown-source-view.mod-cm6 .cm-line.ped-cb-head:hover .ped-cb-copy,
+.markdown-source-view.mod-cm6 .cm-line.ped-cb-head:hover .ped-cb-lang,
+.ped-cb-copy:focus-visible,
+.ped-cb-lang:focus-visible {
+	opacity: 1;
+}
+
+.ped-cb-lang:hover,
+.ped-cb-copy:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+	opacity: 1;
+}
+
+.ped-cb-copy.is-done {
+	color: var(--text-success, var(--text-accent));
+}
+
+/* ---------- language picker ----------
+   Notion's dropdown: a search box over every language, arrow keys, Enter. */
+
+.ped-langpop {
+	position: fixed;
+	z-index: var(--layer-menu, 999);
+	width: 260px;
+	max-height: 340px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border-hover);
+	border-radius: 8px;
+	box-shadow: var(--shadow-s), 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+input.ped-langpop-search {
+	width: 100%;
+	height: 28px;
+	font-size: 13px;
+}
+
+.ped-langpop-list {
+	overflow-y: auto;
+}
+
+.ped-langpop-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 5px 8px;
+	border-radius: 5px;
+	font-size: 13px;
+	cursor: pointer;
+}
+
+.ped-langpop-row:hover,
+.ped-langpop-row.is-active {
+	background: var(--background-modifier-hover);
+}
+
+.ped-langpop-check {
+	color: var(--text-accent);
+}
+
+/* Token colors. Only applied inside a fenced block, so inline code and the
+   rest of the editor keep the theme's own colors. */
+/* the active line inside a block must not flash the theme's light highlight */
+/* Reading view, kept in step */
+
+
+
+/* ---------- syntax colors ----------
+   Obsidian DOES highlight fenced code in Live Preview, but only once the
+   fence names a language — that is why an unlabelled block looks flat, and
+   why the "Set language" chip exists. What the default theme gives those
+   tokens is pale and low-contrast, so this restates them on a GitHub-light
+   palette: enough separation that structure reads at a glance without the
+   block turning into a fruit salad.
+
+   These are Obsidian's own token classes, scoped to fenced blocks so inline
+   code and the rest of the editor keep the theme's colors. */
+
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-comment {
+	color: #6e7781;
+	font-style: italic;
+}
+
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-string,
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-string-2 {
+	color: #0a3069;
+}
+
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-keyword {
+	color: #cf222e;
+	font-weight: 600;
+}
+
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-atom,
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-number,
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-bool {
+	color: #0550ae;
+}
+
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-builtin,
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-def {
+	color: #8250df;
+}
+
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-variable-2,
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-variable-3 {
+	color: #953800;
+}
+
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-attribute,
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-property,
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-qualifier {
+	color: #953800;
+}
+
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-type,
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-tag {
+	color: #116329;
+}
+
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-meta {
+	color: #6e7781;
+}
+
+.markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-operator {
+	color: #0550ae;
+}
+
+/* the same tokens on the terminal skin, which needs light-on-dark values */
+
+/* ---------- code block themes ----------
+   Obsidian highlights fenced code in Live Preview, but only once the fence
+   names a language, and its own token colors are deliberately restrained.
+   These are real editor palettes, declared as variables so a theme is one
+   small block and the rules that consume them are written once.
+
+   Dark-on-light is on purpose: saturated syntax colors need a dark surface,
+   which is why Claude, ChatGPT, and most docs sites render code that way
+   inside otherwise light pages. Vivid Light is there for anyone who wants
+   the light surface kept. */
+
+body.ped-cbt-one-dark {
+	--pedc-gutter: #5c6370;
+	--pedc-bg: #282c34;
+	--pedc-fg: #abb2bf;
+	--pedc-comment: #7f848e;
+	--pedc-string: #98c379;
+	--pedc-keyword: #c678dd;
+	--pedc-number: #d19a66;
+	--pedc-builtin: #61afef;
+	--pedc-variable: #e06c75;
+	--pedc-attr: #d19a66;
+	--pedc-type: #e5c07b;
+	--pedc-operator: #56b6c2;
+	--pedc-border: #3e4451;
+	--pedc-chip: #3a3f4b;
+}
+
+body.ped-cbt-dracula {
+	--pedc-gutter: #6272a4;
+	--pedc-bg: #282a36;
+	--pedc-fg: #f8f8f2;
+	--pedc-comment: #6272a4;
+	--pedc-string: #f1fa8c;
+	--pedc-keyword: #ff79c6;
+	--pedc-number: #bd93f9;
+	--pedc-builtin: #50fa7b;
+	--pedc-variable: #8be9fd;
+	--pedc-attr: #ffb86c;
+	--pedc-type: #8be9fd;
+	--pedc-operator: #ff79c6;
+	--pedc-border: #44475a;
+	--pedc-chip: #44475a;
+}
+
+body.ped-cbt-monokai {
+	--pedc-gutter: #75715e;
+	--pedc-bg: #272822;
+	--pedc-fg: #f8f8f2;
+	--pedc-comment: #75715e;
+	--pedc-string: #e6db74;
+	--pedc-keyword: #f92672;
+	--pedc-number: #ae81ff;
+	--pedc-builtin: #a6e22e;
+	--pedc-variable: #fd971f;
+	--pedc-attr: #a6e22e;
+	--pedc-type: #66d9ef;
+	--pedc-operator: #f92672;
+	--pedc-border: #3e3d32;
+	--pedc-chip: #3e3d32;
+}
+
+body.ped-cbt-github-dark {
+	--pedc-gutter: #6e7681;
+	--pedc-bg: #0d1117;
+	--pedc-fg: #c9d1d9;
+	--pedc-comment: #8b949e;
+	--pedc-string: #a5d6ff;
+	--pedc-keyword: #ff7b72;
+	--pedc-number: #79c0ff;
+	--pedc-builtin: #d2a8ff;
+	--pedc-variable: #ffa657;
+	--pedc-attr: #79c0ff;
+	--pedc-type: #7ee787;
+	--pedc-operator: #ff7b72;
+	--pedc-border: #30363d;
+	--pedc-chip: #21262d;
+}
+
+body.ped-cbt-vivid {
+	--pedc-bg: #f6f6f4;
+	--pedc-fg: #24292f;
+	--pedc-comment: #6b7280;
+	--pedc-string: #067d17;
+	--pedc-keyword: #9333ea;
+	--pedc-number: #b31d28;
+	--pedc-builtin: #1a56db;
+	--pedc-variable: #b31d28;
+	--pedc-attr: #b45309;
+	--pedc-type: #0f766e;
+	--pedc-operator: #57606a;
+	--pedc-border: #dcdcd6;
+	--pedc-chip: #ffffff;
+	--pedc-gutter: #8b8b83;
+}
+
+/* The surface. Only the fence's own lines are painted, so the block reads as
+   one card without touching anything around it. */
+body.ped-cbt .markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock {
+	background: var(--pedc-bg);
+	color: var(--pedc-fg);
+	border-color: var(--pedc-border);
+}
+
+body.ped-cbt .markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock-begin,
+body.ped-cbt .markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock-end {
+	border-color: var(--pedc-border);
+}
+
+body.ped-cbt .markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock.cm-active {
+	background: color-mix(in srgb, var(--pedc-fg) 6%, var(--pedc-bg));
+}
+
+/* the fence markers recede — they are syntax, not content */
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-formatting-code-block {
+	color: var(--pedc-comment);
+}
+
+/* Tokens. These are Obsidian's own class names, scoped to fenced blocks so
+   inline code and the rest of the editor keep the theme's colors. */
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-comment {
+	color: var(--pedc-comment);
+	font-style: italic;
+}
+
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-string,
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-string-2 {
+	color: var(--pedc-string);
+}
+
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-keyword {
+	color: var(--pedc-keyword);
+}
+
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-atom,
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-number,
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-bool {
+	color: var(--pedc-number);
+}
+
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-builtin,
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-def {
+	color: var(--pedc-builtin);
+}
+
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-variable-2,
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-variable-3 {
+	color: var(--pedc-variable);
+}
+
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-attribute,
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-property,
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-qualifier {
+	color: var(--pedc-attr);
+}
+
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-type,
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-tag {
+	color: var(--pedc-type);
+}
+
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-meta {
+	color: var(--pedc-operator);
+}
+
+body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-operator {
+	color: var(--pedc-operator);
+}
+
+/* the header chips have to flip with the surface */
+body.ped-cb-dark .ped-cb-lang,
+body.ped-cb-dark .ped-cb-copy {
+	color: var(--pedc-fg);
+	background: var(--pedc-chip);
+	border-color: var(--pedc-border);
+}
+
+body.ped-cb-dark .ped-cb-lang:hover,
+body.ped-cb-dark .ped-cb-copy:hover {
+	color: #fff;
+	background: color-mix(in srgb, #fff 12%, var(--pedc-chip));
+}
+
+/* Reading view, kept in step */
+body.ped-cbt .markdown-rendered pre {
+	background: var(--pedc-bg);
+	color: var(--pedc-fg);
+	border-color: var(--pedc-border);
+}
+
+body.ped-cbt .markdown-rendered pre code {
+	color: var(--pedc-fg);
+}
+
+/* ---------- line numbers ----------
+   A gutter down the left of the block, the way Claude and GitHub show one.
+   The number comes from a data attribute the plugin sets, not a CSS counter:
+   CodeMirror renders only the lines on screen, so a counter would restart
+   partway down a long block and number it wrongly. */
+
+body.ped-cb-nums .markdown-source-view.mod-cm6 .cm-line.ped-cb-body {
+	padding-inline-start: calc(var(--size-4-4) + 2.6em);
+}
+
+body.ped-cb-nums .markdown-source-view.mod-cm6 .cm-line.ped-cb-body::before {
+	content: attr(data-ped-ln);
+	position: absolute;
+	left: 0;
+	width: 2.4em;
+	padding-inline-end: 0.7em;
+	text-align: right;
+	color: var(--pedc-gutter, var(--text-faint));
+	font-variant-numeric: tabular-nums;
+	pointer-events: none;
+	user-select: none;
+}
+
+/* the rule between gutter and code, matched to the block's own border */
+body.ped-cb-nums .markdown-source-view.mod-cm6 .cm-line.ped-cb-body {
+	position: relative;
+	background-image: linear-gradient(to right, transparent calc(var(--size-4-4) + 1.9em), var(--pedc-border, var(--background-modifier-border)) calc(var(--size-4-4) + 1.9em), var(--pedc-border, var(--background-modifier-border)) calc(var(--size-4-4) + 1.9em + 1px), transparent calc(var(--size-4-4) + 1.9em + 1px));
+}
+
+/* dark themes need a dimmer gutter than their body text */
+body.ped-cb-dark .markdown-source-view.mod-cm6 .cm-line.ped-cb-body::before {
+	color: color-mix(in srgb, var(--pedc-fg) 45%, var(--pedc-bg));
+}
+
+/* the filename at the left of a code block header, Claude-style */
+.ped-cb-file {
+	position: absolute;
+	left: var(--size-4-4);
+	top: 3px;
+	height: 21px;
+	display: inline-flex;
+	align-items: center;
+	padding: 0 6px;
+	max-width: 45%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--font-interface);
+	font-size: 11.5px;
+	line-height: 1;
+	color: var(--pedc-fg, var(--text-muted));
+	background: transparent;
+	border: 1px solid transparent;
+	border-radius: 5px;
+	cursor: pointer;
+	transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+
+.ped-cb-file.is-empty {
+	opacity: 0;
+	color: var(--pedc-comment, var(--text-faint));
+}
+
+.markdown-source-view.mod-cm6 .cm-line.ped-cb-head:hover .ped-cb-file.is-empty {
+	opacity: 1;
+}
+
+.ped-cb-file:hover {
+	background: var(--pedc-chip, var(--background-modifier-hover));
+	border-color: var(--pedc-border, var(--background-modifier-border));
+}
+
+/* the header line itself reads as a bar rather than as a blank first row */
+body.ped-cbt .markdown-source-view.mod-cm6 .cm-line.ped-cb-head {
+	background: color-mix(in srgb, var(--pedc-fg) 4%, var(--pedc-bg));
+	border-bottom: 1px solid var(--pedc-border);
+	min-height: 27px;
+}
+
+/* ---------------- notices in a light theme ----------------
+   Obsidian paints every notice as a near-black slab. In a dark theme that is
+   just the UI; in a light one it reads as an error box, whatever it says, and
+   a progress count or a to-do total is not an error. Same shape and position,
+   the theme's own surface colors. A notice carrying .pw-self-styled brings its
+   own card (Power Desk's meeting reminder) and is left alone. */
+
+body.theme-light .notice:not(.pw-self-styled) {
+	background: var(--background-primary);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: 0 6px 22px rgba(0, 0, 0, 0.14);
+}
+
+body.theme-light .notice:not(.pw-self-styled) a {
+	color: var(--text-accent);
+}
+
+/* the bubble carries the paragraph-style dropdown and separators too, so it
+   needs the toolbar's sizing for both — without this the "H1" label is clipped
+   and the dividers sit at full button height */
+.ped-bubble button.ped-heading {
+	width: auto;
+	min-width: 30px;
+	padding: 0 6px;
+	font-size: 12px;
+	font-weight: 600;
+}
+
+.ped-bubble .ped-sep {
+	height: 16px;
+	margin: 0 3px;
+}
+
+/* ---------- indent guides on numbered lists ----------
+   Obsidian draws a vertical rule down each indent level. On a bulleted list it
+   is the only thing showing the nesting; on a numbered one the numbering
+   already shows it, twice over once the sub-levels letter themselves, and the
+   rule reads as a stray line through the middle of the text. Off by default
+   for ordered lists only, both views, and switchable in settings.
+
+   Written against Obsidian's own rules rather than guessed at: the guide is a
+   ::before carrying a border-INLINE-END (a border-left override does nothing),
+   editing view hangs it on .cm-indent inside the list line, and reading view
+   hangs it on the nested list itself under .show-indentation-guide. The active
+   line has its own brighter colour on .cm-active-indent, so that needs saying
+   too or the guide comes back wherever the cursor is. */
+
+body.ped-no-ol-guides .markdown-source-view.mod-cm6 .HyperMD-list-line:has(.cm-formatting-list-ol) .cm-indent::before,
+body.ped-no-ol-guides .markdown-source-view.mod-cm6 .HyperMD-list-line:has(.cm-formatting-list-ol) .cm-active-indent::before {
+	border-inline-end-color: transparent;
+}
+
+/* reading view: the guide belongs to the nested list, so an ordered one loses
+   it and a bulleted list nested under a numbered item keeps its own */
+body.ped-no-ol-guides .markdown-rendered.show-indentation-guide li > ol::before {
+	border-inline-end-color: transparent;
+}
+
+/* "Hide on every list" - the same two hooks, unfiltered by list type. A
+   bulleted list has nothing but the guide to show its depth, so this is a
+   deliberate choice rather than the default. */
+body.ped-no-guides .markdown-source-view.mod-cm6 .HyperMD-list-line .cm-indent::before,
+body.ped-no-guides .markdown-source-view.mod-cm6 .HyperMD-list-line .cm-active-indent::before {
+	border-inline-end-color: transparent;
+}
+
+body.ped-no-guides .markdown-rendered.show-indentation-guide li > ul::before,
+body.ped-no-guides .markdown-rendered.show-indentation-guide li > ol::before {
+	border-inline-end-color: transparent;
+}
+
+/* ---------- toolbar order list ----------
+   Rows are dragged by their grip, so a drag can never start from the toggle
+   you were reaching for. The drop line is drawn on the row being hovered
+   rather than inserted into the list, which keeps the layout from jumping
+   under the cursor mid-drag. */
+
+.ped-order-divider {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.ped-order-row {
+	position: relative;
+}
+
+.ped-order-grip {
+	display: flex;
+	align-items: center;
+	margin-right: 8px;
+	padding: 2px;
+	border-radius: 4px;
+	color: var(--text-faint);
+	cursor: grab;
+}
+
+.ped-order-grip:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+.ped-order-grip:focus-visible {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 1px;
+}
+
+.ped-order-grip svg {
+	width: 16px;
+	height: 16px;
+}
+
+.ped-order-row.is-dragging {
+	opacity: 0.45;
+}
+
+.ped-order-row.drop-above::before,
+.ped-order-row.drop-below::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 2px;
+	background: var(--interactive-accent);
+	border-radius: 2px;
+	pointer-events: none;
+}
+
+.ped-order-row.drop-above::before {
+	top: -1px;
+}
+
+.ped-order-row.drop-below::after {
+	bottom: -1px;
+}

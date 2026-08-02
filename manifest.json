@@ -1,0 +1,10 @@
+{
+	"id": "powereditor",
+	"name": "Power Editor",
+	"version": "1.52.0",
+	"minAppVersion": "1.5.0",
+	"description": "Format any note from a toolbar, selection bubble, or slash menu: WYSIWYG editing, block drag handles, image resizing, dictation, and AI edits, all staying plain Markdown.",
+	"author": "Power Plugins",
+	"fundingUrl": "https://buymeacoffee.com/powerplugins",
+	"isDesktopOnly": false
+}
