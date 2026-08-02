@@ -2,6 +2,14 @@
 
 A rich formatting toolbar, a TipTap-style selection bubble, **block drag handles**, a true **WYSIWYG mode**, **dictation**, and **image resize handles** on every note, built on Obsidian's own editor, so notes stay plain Markdown and every other plugin (including Power Tables) keeps working.
 
+![A note in editing view with the formatting toolbar across the top, a rendered callout with a drag handle beside it, nested and numbered lists, checkboxes, and a syntax-highlighted TypeScript block with line numbers](docs/images/power-editor.png)
+
+The toolbar sits above the note and its buttons track the cursor, so the list
+button is lit while the cursor is in a list. Markers stay hidden while the text
+stays styled: bold reads as bold and the highlight is painted, with no `**` or
+`==` on screen. The drag handle to the left of the callout moves the whole
+block. The file underneath is still ordinary Markdown.
+
 ## Three ways to format
 
 - **The toolbar** at the top of each note in editing view: undo/redo, a paragraph-style dropdown (Normal, H1-H6, showing the current style), bold, italic, underline, strikethrough, highlight color, inline code, text color, font size & sub/superscript, format painter, the three list types, quote, callout, alignment, indent/outdent, link, code block, insert table, horizontal rule, dictate, AI edits, and clear formatting. Every button reflects the cursor's formatting. Detection reads CodeMirror's real syntax tree, so states are exact. Pick which buttons you want in settings.
