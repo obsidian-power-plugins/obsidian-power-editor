@@ -43,7 +43,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 /**
  * The same three-way rule, entry by entry.
  *
- * A key holding one value per item — per folder, per field, per speaker — is a
+ * A key holding one value per item (per folder, per field, per speaker) is a
  * whole vault's worth of settings behind a single name, and merging it whole
  * meant changing ONE of them published all of them. Every item another device
  * configured since this one last read was erased by a device that had never
@@ -79,7 +79,7 @@ function mergeEntries(
  * The subtlety is that `insertBefore` is measured against the list as the user
  * SEES it, before the dragged item is lifted out. Once it is removed, every
  * position after it shifts down by one, so dropping an item further down the
- * list needs the target decremented — miss that and every downward drag lands
+ * list needs the target decremented, miss that and every downward drag lands
  * one row short.
  */
 export function moveItem<T>(list: T[], from: number, insertBefore: number): T[] {

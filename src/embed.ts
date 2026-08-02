@@ -111,7 +111,7 @@ export function removeEmbed(line: string, target: string): string | null {
 	return null;
 }
 
-/** The embed target as written vs. the src the renderer reports — equal, or
+/** The embed target as written vs. the src the renderer reports, equal, or
  *  equal ignoring a folder prefix / URL-encoding / a #subpath. */
 function sameTarget(written: string, rendered: string): boolean {
 	const a = written.trim().split("#")[0];

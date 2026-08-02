@@ -1,7 +1,7 @@
 /* Pure to-do logic: parsing Tasks-format checklist lines (📅 due, ⏳ scheduled,
  * 🛫 start, 🔁 recurrence, ✅ done, priority arrows), completing them (done-date
  * stamping plus spawning the next occurrence of recurring items), and the
- * little query language behind `todo` dashboard blocks. No Obsidian imports —
+ * little query language behind `todo` dashboard blocks. No Obsidian imports
  * all of this is covered by tests.ts. Dates are local YYYY-MM-DD strings. */
 
 export interface TodoItem {
@@ -60,7 +60,7 @@ export function parseTodo(line: string): TodoItem | null {
 	}
 	const rm = rest.match(/🔁️?\s*([^\n]*?)\s*$/);
 	if (rm && rm[1]) {
-		// keep only the longest valid rule — trailing words that aren't part
+		// keep only the longest valid rule, trailing words that aren't part
 		// of it (tags, stray text) belong to the body, not the recurrence
 		let cand = rm[1].trim();
 		while (cand && !parseRecurrence(cand)) cand = cand.replace(/\s*,?\s*\S+$/, "");

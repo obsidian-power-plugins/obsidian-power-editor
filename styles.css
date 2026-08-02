@@ -199,7 +199,7 @@ body.ped-wys .markdown-source-view.mod-cm6 :is(
 	display: none;
 }
 
-/* links: hide the brackets, parens, and URL string even at the cursor — the
+/* links: hide the brackets, parens, and URL string even at the cursor, the
    Link dialog is how links get made and edited in WYSIWYG mode */
 body.ped-wys .markdown-source-view.mod-cm6 :is(.cm-formatting-link, .cm-formatting-link-string, .cm-string.cm-url) {
 	display: none;
@@ -210,7 +210,7 @@ body.ped-wys .markdown-source-view.mod-cm6 :is(.cm-hmd-internal-link.cm-link-has
 	display: none;
 }
 
-/* callouts: the [!type] token (and its fold char) never shows while editing —
+/* callouts: the [!type] token (and its fold char) never shows while editing
    the type already reads through the callout's color and emoji. The formatting
    hider above misses it because callout tokens are cm-hmd-callout, not
    cm-formatting-*. Scoped to Live Preview so source mode stays fully literal. */
@@ -473,13 +473,13 @@ body.ped-lh-relaxed .markdown-preview-view {
 
 /* ---------- block gap ----------
    The space under a heading, and around a table, is not padding or margin
-   in Live Preview — Obsidian gives .cm-line "padding: 0" and derives the
+   in Live Preview, Obsidian gives .cm-line "padding: 0" and derives the
    heading's own gap from --p-spacing, which only covers the space ABOVE
    it (--p-spacing-empty, the one below, is 0). What you actually see is
    the blank source line: a real editor line at a full line-height, which
    no Obsidian variable can reach.
 
-   Markdown needs that blank line — a table loses its header without one —
+   Markdown needs that blank line, a table loses its header without one
    so it cannot simply be deleted. Shrinking it is the only lever, and
    font-size will not do it because the inherited line-height is a fixed
    length. Setting line-height on the line itself does.
@@ -838,7 +838,7 @@ input.ped-prompt-input {
 }
 
 /* the emoji stands in for the type's icon, so the built-in badge only steps
-   aside on callouts that carry one — a hand-typed `> [!tip]` keeps its
+   aside on callouts that carry one, a hand-typed `> [!tip]` keeps its
    lightbulb instead of rendering as a bare tinted box */
 .callout.ped-emoji-icon:not([data-callout="toggle"]) > .callout-title .callout-icon {
 	display: none;
@@ -863,7 +863,7 @@ input.ped-prompt-input {
 	height: 18px;
 }
 
-/* a tip is a lightbulb, not a flame — Obsidian's default reads as "hot take".
+/* a tip is a lightbulb, not a flame, Obsidian's default reads as "hot take".
    The alias types land on the same callout, so they get the same bulb. */
 .callout[data-callout="tip"],
 .callout[data-callout="hint"],
@@ -1581,7 +1581,7 @@ button.ped-tab.is-active {
 }
 
 /* rendered content sits flush at the pane top so it lines up with the edit
-   box — otherwise the first paragraph's top margin makes the text jump up
+   box, otherwise the first paragraph's top margin makes the text jump up
    when you click in to edit */
 .ped-tabpane > :first-child {
 	margin-top: 0;
@@ -1863,7 +1863,7 @@ body.is-mobile .ped-columns {
    One row on the opening fence: the language as a dropdown button, then Copy.
    Obsidian renders its own `code-block-flair` label for the language too, and
    two labels for the same thing is what made them collide, so its copy is
-   hidden here and ours — which is clickable — is the one that shows. */
+   hidden here and ours (which is clickable) is the one that shows. */
 
 .markdown-source-view.mod-cm6 .cm-line.ped-cb-head .code-block-flair {
 	display: none;
@@ -1988,7 +1988,7 @@ input.ped-langpop-search {
    One row on the opening fence: the language as a dropdown button, then Copy.
    Obsidian renders its own `code-block-flair` label for the language too, and
    two labels for the same thing is what made them collide, so its copy is
-   hidden here and ours — which is clickable — is the one that shows. */
+   hidden here and ours (which is clickable) is the one that shows. */
 
 .markdown-source-view.mod-cm6 .cm-line.ped-cb-head .code-block-flair {
 	display: none;
@@ -2111,7 +2111,7 @@ input.ped-langpop-search {
 
 /* ---------- syntax colors ----------
    Obsidian DOES highlight fenced code in Live Preview, but only once the
-   fence names a language — that is why an unlabelled block looks flat, and
+   fence names a language, that is why an unlabelled block looks flat, and
    why the "Set language" chip exists. What the default theme gives those
    tokens is pale and low-contrast, so this restates them on a GitHub-light
    palette: enough separation that structure reads at a glance without the
@@ -2285,7 +2285,7 @@ body.ped-cbt .markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock.cm-active 
 	background: color-mix(in srgb, var(--pedc-fg) 6%, var(--pedc-bg));
 }
 
-/* the fence markers recede — they are syntax, not content */
+/* the fence markers recede, they are syntax, not content */
 body.ped-cbt .markdown-source-view.mod-cm6 .HyperMD-codeblock .cm-formatting-code-block {
 	color: var(--pedc-comment);
 }
@@ -2464,7 +2464,7 @@ body.theme-light .notice:not(.pw-self-styled) a {
 }
 
 /* the bubble carries the paragraph-style dropdown and separators too, so it
-   needs the toolbar's sizing for both — without this the "H1" label is clipped
+   needs the toolbar's sizing for both, without this the "H1" label is clipped
    and the dividers sit at full button height */
 .ped-bubble button.ped-heading {
 	width: auto;
@@ -2490,7 +2490,7 @@ body.theme-light .notice:not(.pw-self-styled) a {
    ::before carrying a border-INLINE-END (a border-left override does nothing),
    editing view hangs it on .cm-indent inside the list line, and reading view
    hangs it on the nested list itself under .show-indentation-guide. The active
-   line has its own brighter colour on .cm-active-indent, so that needs saying
+   line has its own brighter color on .cm-active-indent, so that needs saying
    too or the guide comes back wherever the cursor is. */
 
 body.ped-no-ol-guides .markdown-source-view.mod-cm6 .HyperMD-list-line:has(.cm-formatting-list-ol) .cm-indent::before,

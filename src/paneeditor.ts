@@ -1,14 +1,14 @@
 /* An embeddable Obsidian markdown editor for tab panes: the same internal
  * editor class the app uses in notes, resolved at runtime the way Kanban and
  * Meta Bind do it. This is an internal API (not officially public), so every
- * touch point is guarded — when the shape isn't what we expect, callers get
+ * touch point is guarded, when the shape isn't what we expect, callers get
  * null and fall back to the plain-textarea pane editor.
  *
  * What using the real editor buys inside a pane: live-preview rendering,
  * Obsidian's native list continuation and Tab indenting, the plugin's own
  * editor extensions (outline numbering, WYSIWYG hiding, heading placeholders),
- * slash commands, and — because the pane registers itself as the workspace's
- * active editor while focused — the formatting toolbar and core editor
+ * slash commands, and, because the pane registers itself as the workspace's
+ * active editor while focused, the formatting toolbar and core editor
  * commands act on the pane just like on a note. */
 
 import { App, Editor, TFile } from "obsidian";
@@ -29,9 +29,9 @@ export interface PaneEditorOptions {
 	sourcePath: string;
 	/** Any document change (used for dirty tracking / deferred saves). */
 	onChange(): void;
-	/** Focus left the pane — a good moment to flush. */
+	/** Focus left the pane, a good moment to flush. */
 	onBlur(): void;
-	/** Escape pressed — flush and settle. */
+	/** Escape pressed, flush and settle. */
 	onEscape(): void;
 }
 

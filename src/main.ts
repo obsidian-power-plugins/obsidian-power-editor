@@ -148,7 +148,7 @@ import {
  *  so the note never "opens up" while editing:
  *  1. collapse the inline-HTML wrappers the toolbar writes (<u>, <span style>,
  *     <mark>) with atomic ranges, so arrow keys hop over them;
- *  2. style the wrapped content directly (underline / color / highlight) —
+ *  2. style the wrapped content directly (underline / color / highlight)
  *     Live Preview won't render inline HTML while the cursor is inside it, so
  *     without this the formatting would vanish at the cursor;
  *  3. hide alignment markers and apply their text-align to the line. */
@@ -383,7 +383,7 @@ function orderedListOutline(plugin: PowerEditorPlugin) {
  *  Live Preview reveals the raw `- [ ]` on the active line (most visible when a
  *  note opens with a task on the first line and the cursor lands there), which
  *  reads as a broken checkbox. Off the active line Obsidian draws the box
- *  itself, so this only fills the active line, where Obsidian shows none — no
+ *  itself, so this only fills the active line, where Obsidian shows none, no
  *  double box. The rendered input carries Obsidian's own task-checkbox class,
  *  so the existing capture-phase click handler toggles it like any other. */
 function liveTaskCheckbox(plugin: PowerEditorPlugin) {
@@ -724,7 +724,7 @@ const DEFAULT_BUTTON_ORDER: string[] = [
 
 
 /** Curated, searchable-by-name emoji set (the system picker still exists for
- *  the long tail — this covers what notes actually use). */
+ *  the long tail, this covers what notes actually use). */
 const EMOJI: [string, string][] = [
 	["😀", "grinning smile happy"], ["😁", "beaming grin"], ["😂", "joy laughing tears"], ["🤣", "rofl laughing"],
 	["😊", "smiling blush"], ["😉", "wink"], ["😍", "heart eyes love"], ["😘", "kiss"], ["😎", "cool sunglasses"],
@@ -980,7 +980,7 @@ class FileNameWidget extends WidgetType {
 }
 
 /** The language name on a fence, as a button. Always present, so a block that
- *  already has a language can be changed as easily as one that has none —
+ *  already has a language can be changed as easily as one that has none
  *  which is also why Obsidian's own `code-block-flair` label is hidden in CSS,
  *  since two labels for the same thing is what made them collide. */
 class LangButtonWidget extends WidgetType {
@@ -1066,7 +1066,7 @@ const codeBlockChrome = ViewPlugin.fromClass(
 				b.add(head.to, head.to, Decoration.widget({ widget: new CopyCodeWidget(fenceBody(doc, blk.start, blk.mark)), side: 2 }));
 				if (!numbers) continue;
 				// The gutter number is the line's position INSIDE the block, and
-				// it comes from the real line number rather than a CSS counter —
+				// it comes from the real line number rather than a CSS counter
 				// CodeMirror only renders what is on screen, so a counter would
 				// restart partway down a long block.
 				for (let n = blk.start + 1; n < blk.end; n++) {
@@ -1425,7 +1425,7 @@ class TodoBlock extends MarkdownRenderChild {
 	}
 }
 
-/** The Today pane: a persistent sidebar answer to "what now" — Overdue,
+/** The Today pane: a persistent sidebar answer to "what now", Overdue,
  *  Today, and the next seven days, with the same live rows as dashboards. */
 class TodayView extends ItemView {
 	private timer: number | null = null;
@@ -1630,7 +1630,7 @@ const AI_ACTIONS: [string, string][] = [
 ];
 
 /** The family palette (same swatches as Power Tables): a row of soft fills,
- *  a row of medium fills, and a row of strong colors — 8 each. */
+ *  a row of medium fills, and a row of strong colors, 8 each. */
 const PALETTE = [
 	"#FFFFFF", "#EFEAFC", "#E3F0FC", "#E2F5EA", "#FDF3D7", "#FCE9DC", "#FDE8E6", "#F1F1F4",
 	"#D9CCF7", "#BFDDF8", "#BEE9CF", "#F8E4A0", "#F7CDB0", "#F6C3BE", "#DFDFE5", "#B9B9C2",
@@ -1648,7 +1648,7 @@ const BG_COLORS: [string, string][] = [
 ];
 
 /** THE heading-typing fix. CodeMirror's inputHandler facet is called with the
- *  insertion range in CM's own document coordinates (from/to) — authoritative,
+ *  insertion range in CM's own document coordinates (from/to), authoritative,
  *  never stale like editor.getCursor() and never empty like beforeinput's
  *  getTargetRanges(). When a character would land before a heading's hidden
  *  "# " marker, we insert it after the marker instead and tell CM we handled
@@ -1666,8 +1666,8 @@ function headingInputFix(plugin: PowerEditorPlugin) {
 }
 
 /** Keep the caret out of a heading's hidden "# " marker (WYSIWYG only). Without
- *  this, clicking an empty heading lands the caret at offset 0 — before the
- *  hidden hash — and typing produces "text# " instead of a heading. */
+ *  this, clicking an empty heading lands the caret at offset 0, before the
+ *  hidden hash, and typing produces "text# " instead of a heading. */
 function headingCursorGuard(plugin: PowerEditorPlugin) {
 	return EditorState.transactionFilter.of((tr) => {
 		if (!plugin.settings.wysiwygMarks || !tr.selection) return tr;
@@ -1679,7 +1679,7 @@ function headingCursorGuard(plugin: PowerEditorPlugin) {
 	});
 }
 
-/** Empty headings show a greyed "Heading N" label, Notion-style — the hashes
+/** Empty headings show a greyed "Heading N" label, Notion-style, the hashes
  *  are hidden in WYSIWYG mode, so without this an empty heading looks blank.
  *  Only meaningful in WYSIWYG mode: with the hashes visible the line already
  *  reads as a heading, so the label would just be noise. */
@@ -1776,7 +1776,7 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	/** The blank line under a heading, and the ones hugging a table, are real
-	 *  editor lines in Live Preview — a full line-height each, and no Obsidian
+	 *  editor lines in Live Preview, a full line-height each, and no Obsidian
 	 *  spacing variable reaches them. This publishes the wanted heights as
 	 *  custom properties; styles.css uses them to shrink exactly those lines.
 	 *  Headings and tables carry their own class and variable so either can be
@@ -1860,8 +1860,8 @@ export default class PowerEditorPlugin extends Plugin {
 	 * plain copy carries the rich flavor too.
 	 *
 	 * Rendering Markdown is asynchronous and a clipboard event is not, so the
-	 * event writes the Markdown itself first — the clipboard is never empty and
-	 * never wrong — and the HTML replaces it a few milliseconds later. Pasting
+	 * event writes the Markdown itself first, the clipboard is never empty and
+	 * never wrong, and the HTML replaces it a few milliseconds later. Pasting
 	 * inside that window gets exactly what Ctrl+C always gave.
 	 */
 	private onEditorCopy(e: ClipboardEvent) {
@@ -1909,10 +1909,10 @@ export default class PowerEditorPlugin extends Plugin {
 					if (p === root) break;
 					if (p.tagName === "OL") depth++;
 				}
-				// Both spellings, because clients honour different ones: the type
+				// Both spellings, because clients honor different ones: the type
 				// attribute is what Word and the old Outlook read, and the current
 				// Outlook is the web client, whose editor rewrites a pasted list and
-				// keeps only what it recognises as styling. The style goes on each
+				// keeps only what it recognizes as styling. The style goes on each
 				// item as well as the list: that rewrite can rebuild the <ol> around
 				// items it keeps, and an item carrying its own marker survives it.
 				list.setAttribute("type", olTypeForDepth(depth));
@@ -2023,7 +2023,7 @@ export default class PowerEditorPlugin extends Plugin {
 	 * Obsidian reports a throw in here as a bare "encountered an error while
 	 * loading" with no detail, and on a phone there is no console to go and
 	 * read. So the real message is caught and shown, and whatever managed to
-	 * register before the throw stays registered — a partly working plugin
+	 * register before the throw stays registered, a partly working plugin
 	 * beats one that silently does nothing.
 	 */
 	async onload() {
@@ -2112,8 +2112,8 @@ export default class PowerEditorPlugin extends Plugin {
 				// must be hidden markup, so the user is visually on the item's first
 				// character.
 				if (!/^(?:<[^>]*>|\s)*$/.test(cm.state.doc.sliceString(contentStart, sel.from))) return;
-				// The selection is then either collapsed there, or — the case that
-				// destroyed content — the click expanded across the whole atomic
+				// The selection is then either collapsed there, or, the case that
+				// destroyed content, the click expanded across the whole atomic
 				// `<mark>...</mark>` span and runs to the end of the line. Measured
 				// in the editor: from=17, to=130, with the line ending at 130. A
 				// deliberate partial selection stops short of that and is left to
@@ -2152,7 +2152,7 @@ export default class PowerEditorPlugin extends Plugin {
 			e.stopPropagation();
 			const line = Number(btn.getAttribute("data-ped-line") ?? "-1");
 			const ed = this.activeEditor();
-			// anchor on the chip, not the text cursor — the cursor is usually
+			// anchor on the chip, not the text cursor, the cursor is usually
 			// somewhere else entirely, which puts the menu off screen
 			if (ed && line >= 0) this.pickLanguageForFence(ed, line, btn);
 		});
@@ -2166,7 +2166,7 @@ export default class PowerEditorPlugin extends Plugin {
 			const ed = this.activeEditor();
 			if (ed && line >= 0) this.renameCodeBlock(ed, line);
 		});
-		// right-click a folder to upgrade just that corner of the vault — the
+		// right-click a folder to upgrade just that corner of the vault, the
 		// natural scope when one imported tree carries the old "Tip:" style
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, target) => {
@@ -2202,7 +2202,7 @@ export default class PowerEditorPlugin extends Plugin {
 				title.insertBefore(span, node);
 				const callout = title.closest(".callout") as HTMLElement | null;
 				// The emoji IS the icon here, so the type's own Lucide badge steps
-				// aside — but only on callouts that actually carry one. A header
+				// aside, but only on callouts that actually carry one. A header
 				// typed by hand keeps its badge and still reads as a tip. Live
 				// preview hangs the icon off .cm-callout, outside .callout, so
 				// both wrappers get flagged.
@@ -2321,7 +2321,7 @@ export default class PowerEditorPlugin extends Plugin {
 			icon: "lightbulb",
 			editorCallback: (ed) => this.pickCalloutAtCursor(ed),
 		});
-		// each flavor is its own bindable command — a hotkey straight to a tip
+		// each flavor is its own bindable command, a hotkey straight to a tip
 		for (const f of CALLOUT_FLAVORS) {
 			this.addCommand({
 				id: `callout-${f.type}`,
@@ -2410,7 +2410,7 @@ export default class PowerEditorPlugin extends Plugin {
 		this.addCommand({ id: "format-painter", icon: "paintbrush", name: "Format painter (paint once)", editorCallback: (ed) => this.armPainter(ed) });
 		this.addCommand({ id: "insert-link", icon: "link", name: "Insert or edit link", editorCallback: (ed) => this.openLinkDialog(ed) });
 		// right-clicking a link: core's "Edit link" only selects the markdown
-		// (which WYSIWYG keeps hidden, so it looks like a no-op) — offer the
+		// (which WYSIWYG keeps hidden, so it looks like a no-op), offer the
 		// Link dialog instead, which also understands bare pasted URLs
 		this.registerEvent(
 			this.app.workspace.on("editor-menu", (menu, editor) => {
@@ -2473,7 +2473,7 @@ export default class PowerEditorPlugin extends Plugin {
 		);
 		// Keep the caret out of a heading's hidden "# " marker. The CM transaction
 		// filter that does this doesn't apply to already-open notes until they're
-		// rebuilt, so do it here too — a DOM handler takes effect immediately.
+		// rebuilt, so do it here too, a DOM handler takes effect immediately.
 		// The marker is zero-width when hidden, so this correction is invisible.
 		this.registerDomEvent(document, "mouseup", () => window.setTimeout(() => this.snapHeadingCaret(), 0));
 		this.registerDomEvent(document, "keyup", (e) => {
@@ -2636,7 +2636,7 @@ export default class PowerEditorPlugin extends Plugin {
 		if (this.settings.onenoteMobileToolbar) {
 			document.body.addClass("ped-mobile-bar");
 			if (JSON.stringify(current) === JSON.stringify(MOBILE_TOOLBAR)) return;
-			// only the user's own arrangement is worth keeping — never overwrite
+			// only the user's own arrangement is worth keeping, never overwrite
 			// the backup with an older bar set from a previous plugin version
 			if (this.readToolbarBackup() == null) this.writeToolbarBackup(current);
 			vault.setConfig("mobileToolbarCommands", MOBILE_TOOLBAR);
@@ -2760,7 +2760,7 @@ export default class PowerEditorPlugin extends Plugin {
 			).cm;
 			if (!cm) return;
 			// a checkbox inside a tab-pane editor is NOT in the host editor's
-			// document — mapping it through the host cm would edit the wrong
+			// document, mapping it through the host cm would edit the wrong
 			// line. Let the pane's own editor handle it natively.
 			if (!cm.dom.contains(target)) return;
 			let line: { from: number; to: number; text: string };
@@ -2827,7 +2827,7 @@ export default class PowerEditorPlugin extends Plugin {
 
 	/** Guarded source edit: the line index came from render time, so nothing
 	 *  happens when the line no longer holds the same item. Every remote edit
-	 *  offers a five-second Undo toast — dashboards and panes edit other
+	 *  offers a five-second Undo toast, dashboards and panes edit other
 	 *  files, outside those notes' Ctrl+Z. */
 	private async editTodoLine(t: TodoItem, change: (line: string) => string[] | null) {
 		const file = this.app.vault.getAbstractFileByPath(t.path ?? "");
@@ -2933,7 +2933,7 @@ export default class PowerEditorPlugin extends Plugin {
 		menu.addItem((i) => i.setTitle("Next week").setIcon("calendar-plus").onClick(() => set(parseDatePhrase("next week", today))));
 		menu.addItem((i) =>
 			i.setTitle("Pick date…").setIcon("calendar-search").onClick(() => {
-				new TextPromptModal(this.app, "Due date — a date or phrase like 'next friday' or 'aug 1'", t.due ?? today, (raw) => {
+				new TextPromptModal(this.app, "Due date, a date or phrase like 'next friday' or 'aug 1'", t.due ?? today, (raw) => {
 					const d = parseDatePhrase(raw, todayStr());
 					if (d) set(d);
 					else new Notice("Power Editor: couldn't read that as a date.");
@@ -2945,9 +2945,9 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	/** Quick capture: one natural-language line into the inbox note from
-	 *  anywhere — "rotate tires every 6 months starting aug 1". */
+	 *  anywhere, "rotate tires every 6 months starting aug 1". */
 	quickCapture() {
-		new TextPromptModal(this.app, "Add a to-do — try 'call bob tomorrow' or 'rotate tires every 6 months'", "", (raw) => {
+		new TextPromptModal(this.app, "Add a to-do, try 'call bob tomorrow' or 'rotate tires every 6 months'", "", (raw) => {
 			if (!raw.trim()) return;
 			const parsed = parseQuickTodo(raw, todayStr());
 			const t = parseTodo(`- [ ] ${parsed.body || raw.trim()}`);
@@ -3001,7 +3001,7 @@ export default class PowerEditorPlugin extends Plugin {
 		if (!open.length) return;
 		const overdue = open.filter((t) => t.due != null && t.due < today).length;
 		const notice = new Notice(
-			`${open.length} to-do${open.length === 1 ? "" : "s"} due today${overdue ? ` (${overdue} overdue)` : ""} — click to open Today`,
+			`${open.length} to-do${open.length === 1 ? "" : "s"} due today${overdue ? ` (${overdue} overdue)` : ""}, click to open Today`,
 			10000
 		);
 		notice.noticeEl.addEventListener("click", () => {
@@ -3072,7 +3072,7 @@ export default class PowerEditorPlugin extends Plugin {
 		const scheduleFlush = (ms: number) => {
 			if (flushTimer != null) window.clearTimeout(flushTimer);
 			flushTimer = window.setTimeout(() => {
-				// never yank the editor out from under a focused pane — the
+				// never yank the editor out from under a focused pane, the
 				// write re-renders this block; wait for the next blur instead
 				if (pane?.hasFocus()) return;
 				flush();
@@ -3732,7 +3732,7 @@ export default class PowerEditorPlugin extends Plugin {
 	 *  a preference for one glance, not something worth writing to disk. */
 	private editedExpanded = new Set<string>();
 
-	/** Re-time the stamps without touching covers, icons, or layout — the
+	/** Re-time the stamps without touching covers, icons, or layout, the
 	 *  minute tick should not churn the rest of the page chrome. */
 	private refreshEditedStamps() {
 		if (this.settings.showEdited === "off") return;
@@ -3997,7 +3997,7 @@ export default class PowerEditorPlugin extends Plugin {
 				model: this.settings.aiModel,
 				max_tokens: 4096,
 				system:
-					"You revise Markdown passages according to a reviewer comment. Reply with ONLY the revised passage — no preamble, no quotes, no code fences. Preserve Markdown structure (links, emphasis, lists) unless the comment says otherwise.",
+					"You revise Markdown passages according to a reviewer comment. Reply with ONLY the revised passage: no preamble, no quotes, no code fences. Preserve Markdown structure (links, emphasis, lists) unless the comment says otherwise.",
 				messages: [{ role: "user", content: `Reviewer comment: "${instruction}"\n\nPassage:\n"""\n${passage}\n"""` }],
 			});
 			const out = msg.content
@@ -4046,7 +4046,7 @@ export default class PowerEditorPlugin extends Plugin {
 		menu.addItem((i) => i.setTitle("Verify (no expiry)").setIcon("badge-check").onClick(() => write(null)));
 		menu.addItem((i) =>
 			i.setTitle("Verify with expiry…").setIcon("calendar-clock").onClick(() =>
-				new TextPromptModal(this.app, "Verified until — a date or phrase like 'in 6 months'", "in 6 months", (raw) => {
+				new TextPromptModal(this.app, "Verified until, a date or phrase like 'in 6 months'", "in 6 months", (raw) => {
 					const d = parseDatePhrase(raw, todayStr());
 					if (d) write(d);
 					else new Notice("Power Editor: couldn't read that as a date.");
@@ -4076,7 +4076,7 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	/** Notion-style toggle: fold the block under the cursor behind its
-	 *  first line (a collapsed [!toggle] callout — plain markdown, folds
+	 *  first line (a collapsed [!toggle] callout, plain markdown, folds
 	 *  natively everywhere). On a block that is already a folded callout the
 	 *  same button unwraps it back to plain text, title first. */
 	toggleBlock(ed: Editor) {
@@ -4087,8 +4087,8 @@ export default class PowerEditorPlugin extends Plugin {
 		const picked =
 			(hasSelection ? unionBlockRange(lines, from.line, to.line) : blockRangeAt(lines, from.line)) ??
 			blockRangeAt(lines, from.line) ?? { from: from.line, to: from.line };
-		// with no selection, a bullet list folds whole — first item as the title,
-		// siblings as the body — instead of stranding them outside the callout
+		// with no selection, a bullet list folds whole, first item as the title,
+		// siblings as the body, instead of stranding them outside the callout
 		const range = hasSelection ? picked : listStretchRange(lines, picked);
 		const isToggle = /^\s*>\s*\[!\w+\]-/.test(lines[range.from]);
 		const next = transformBlock(
@@ -4183,7 +4183,7 @@ export default class PowerEditorPlugin extends Plugin {
 	/** The toolbar's buttons in the order they should appear. Unknown ids are
 	 *  dropped and anything the order has not heard of is appended, so a button
 	 *  added in a later version still shows up instead of silently vanishing
-	 *  for anyone who has customised the order. */
+	 *  for anyone who has customized the order. */
 	orderedButtonIds(): string[] {
 		const known = new Set(BUTTON_IDS.map(([id]) => id));
 		const saved = this.settings.buttonOrder.length ? this.settings.buttonOrder : DEFAULT_BUTTON_ORDER;
@@ -4656,7 +4656,7 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	private clearFormatting(ed: Editor) {
-		// A selection strips in place — widened first, since under WYSIWYG the
+		// A selection strips in place, widened first, since under WYSIWYG the
 		// hidden ==/mark/span markers sit just OUTSIDE the visible selection.
 		// With no strippable selection, clearing works on whole lines, which
 		// also resets headings and alignment.
@@ -4687,7 +4687,7 @@ export default class PowerEditorPlugin extends Plugin {
 	 * widget, and the note's editor is left holding a cursor pointing into the
 	 * table's raw markdown. Writing there puts the text somewhere else in the
 	 * table, or the cell syncs its own unchanged content back over it a moment
-	 * later — which is what "I clicked Insert and nothing happened" looks like.
+	 * later, which is what "I clicked Insert and nothing happened" looks like.
 	 *
 	 * So reads and writes both go to whichever CodeMirror has focus. Everywhere
 	 * outside a table that IS the note's editor, and nothing changes.
@@ -4701,7 +4701,7 @@ export default class PowerEditorPlugin extends Plugin {
 	 * `.cm-cursorLayer` tree), so the cell's selection lives there and the
 	 * note's editor reports none. Anything that asks the note's editor whether
 	 * text is selected therefore sees nothing while a cell selection is plainly
-	 * visible — which is what "the bubble doesn't work in tables" was.
+	 * visible, which is what "the bubble doesn't work in tables" was.
 	 */
 	private focusedCm(fallback: EditorView | null): EditorView | null {
 		const host = (document.activeElement as HTMLElement | null)?.closest?.(".cm-editor") as HTMLElement | null;
@@ -4714,7 +4714,7 @@ export default class PowerEditorPlugin extends Plugin {
 	 * Whole-line rewrites must refuse in that case. A cell is edited in its own
 	 * nested CodeMirror, but the note's Editor still addresses the raw markdown,
 	 * where the "line" is the entire table row. Prefixing that with "## " does
-	 * not make a heading of the cell, it rips the row out of the table — which
+	 * not make a heading of the cell, it rips the row out of the table, which
 	 * is exactly what applying a heading to a cell used to do.
 	 */
 	private inTableCell(): boolean {
@@ -4723,7 +4723,7 @@ export default class PowerEditorPlugin extends Plugin {
 
 	private cursorDoc(ed: Editor): CursorDoc {
 		const main = (ed as unknown as { cm?: EditorView }).cm ?? null;
-		// The CodeMirror that owns the focused element — the cell's when a table
+		// The CodeMirror that owns the focused element, the cell's when a table
 		// cell is being edited, the note's otherwise. Reading the selection off
 		// the view itself rather than the Editor wrapper is also the safer answer
 		// if a future Obsidian edits cells inside the main editor after all: a
@@ -4776,7 +4776,7 @@ export default class PowerEditorPlugin extends Plugin {
 		let address = "";
 		let noteQuery = "";
 		// a link under the cursor (or covering the selection) is edited in
-		// place, fully prefilled — a selected bare URL is the ADDRESS, not
+		// place, fully prefilled, a selected bare URL is the ADDRESS, not
 		// the display text
 		const sameLine = from.line === to.line;
 		const found = sameLine ? linkAt(doc.line(from.line), from.ch) : null;
@@ -4813,7 +4813,7 @@ export default class PowerEditorPlugin extends Plugin {
 		if (changes.length) ed.transaction({ changes });
 	}
 
-	/** Indent or outdent the selected lines — native CodeMirror behavior, the
+	/** Indent or outdent the selected lines, native CodeMirror behavior, the
 	 *  same as Tab / Shift+Tab, so lists nest correctly. */
 	private indent(ed: Editor, dir: 1 | -1) {
 		const exec = (ed as unknown as { exec?: (cmd: string) => void }).exec;
@@ -4835,14 +4835,14 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	/** One whole-document edit (a single undo step), then park the cursor.
-	 *  The viewport stays exactly where it was unless `follow` is set — a
+	 *  The viewport stays exactly where it was unless `follow` is set, a
 	 *  whole-doc change plus recentering is what made pages look like they
 	 *  jumped after every block move. */
 	private applyDoc(ed: Editor, prevLines: string[], nextLines: string[], cursorLine: number, follow = false) {
 		const scroller = ((ed as unknown as { cm?: EditorView }).cm as EditorView | undefined)?.scrollDOM ?? null;
 		const scrollTop = scroller?.scrollTop ?? 0;
 		// Narrow the write to the lines that actually changed. Replacing the
-		// whole document — which is what this used to do — invalidates every
+		// whole document (which is what this used to do) invalidates every
 		// position in it, and CodeMirror's folds are positions: collapse a
 		// dozen headings, delete one block, and all twelve spring open.
 		const e = narrowEdit(prevLines, nextLines);
@@ -4945,7 +4945,7 @@ export default class PowerEditorPlugin extends Plugin {
 		const sel = ed.getSelection();
 		if (!sel) return;
 		const cleaned = cleanCopyText(sel, mode);
-		if (cleaned === sel) return; // nothing formatted — let Obsidian's own copy run
+		if (cleaned === sel) return; // nothing formatted, let Obsidian's own copy run
 		e.preventDefault();
 		e.stopPropagation();
 		e.clipboardData?.setData("text/plain", cleaned);
@@ -4956,7 +4956,7 @@ export default class PowerEditorPlugin extends Plugin {
 
 	/** Painter semantics: click = paint once, double-click = keep painting
 	 *  until Esc (or clicking the brush again). Detection reads the syntax
-	 *  tree and enclosing HTML wrappers — a WYSIWYG selection holds only the
+	 *  tree and enclosing HTML wrappers, a WYSIWYG selection holds only the
 	 *  inner text, so scanning the selection string finds nothing. */
 	private armPainter(ed: Editor, sticky = false) {
 		if (this.painter && !sticky) {
@@ -5131,7 +5131,7 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	/** Optional post-dictation pass: filler-free prose or a bullet list. Any
-	 *  failure falls back to the raw transcript — words never get lost. */
+	 *  failure falls back to the raw transcript, words never get lost. */
 	private async maybeTidy(text: string): Promise<string> {
 		const mode = this.settings.dictationMode;
 		const key = this.aiKey();
@@ -5203,7 +5203,7 @@ export default class PowerEditorPlugin extends Plugin {
 				model: this.settings.aiModel,
 				max_tokens: 4096,
 				system:
-					"You edit Markdown text. Reply with ONLY the rewritten text — no preamble, no quotes, no code fences. Preserve Markdown structure (links, emphasis, lists) unless the instruction says otherwise.",
+					"You edit Markdown text. Reply with ONLY the rewritten text: no preamble, no quotes, no code fences. Preserve Markdown structure (links, emphasis, lists) unless the instruction says otherwise.",
 				messages: [{ role: "user", content: `${instruction}\n\n"""\n${sel}\n"""` }],
 			});
 			const out = msg.content
@@ -5217,7 +5217,7 @@ export default class PowerEditorPlugin extends Plugin {
 		}
 	}
 
-	/** The paragraph-style menu (Normal text, Heading 1–6), anchored on whatever
+	/** The paragraph-style menu (Normal text, Heading 1-6), anchored on whatever
 	 *  button opened it. Shared by the toolbar and the selection bubble so the
 	 *  two can never drift apart. */
 	openHeadingMenu(ed: Editor, anchor: HTMLElement) {
@@ -5403,7 +5403,7 @@ export default class PowerEditorPlugin extends Plugin {
 		menu.showAtPosition({ x: window.innerWidth / 2 - 140, y: 140 });
 	}
 
-	/** Clean up ==highlights== in the active note — one undoable edit. */
+	/** Clean up ==highlights== in the active note, one undoable edit. */
 	private cleanNoteHighlights(ed: Editor) {
 		const lines = ed.getValue().split("\n");
 		const probe = sweepHighlights(lines.join("\n"), null);
@@ -5454,7 +5454,7 @@ export default class PowerEditorPlugin extends Plugin {
 
 	private applyColor(ed: Editor, mode: "text" | "hl", hex: string | null) {
 		if (!ed.getSelection()) return;
-		// swallow the hidden wrapper markers around the visible selection —
+		// swallow the hidden wrapper markers around the visible selection
 		// this is what lets a color change or Clear act on imported ==…==
 		const { from, to } = this.expandStyleSelection(ed);
 		let sel = ed.getRange(from, to);
@@ -5479,7 +5479,7 @@ export default class PowerEditorPlugin extends Plugin {
 		ed.setSelection(from, end);
 	}
 
-	/** Font size and sub/superscript, one menu — spans the engine renders live. */
+	/** Font size and sub/superscript, one menu, spans the engine renders live. */
 	private showFontSizeMenu(ed: Editor, anchor: HTMLElement) {
 		if (!ed.getSelection()) {
 			new Notice("Select some text first.");
@@ -5544,8 +5544,8 @@ export default class PowerEditorPlugin extends Plugin {
 				max_tokens: 1024,
 				system:
 					mode === "continue"
-						? "Continue the user's document. Reply with ONLY the continuation in Markdown — a paragraph or two (or matching list items if a list is open), matching the document's tone, language, and formatting. No preamble."
-						: "Summarize the user's document. Reply with ONLY a concise Markdown bullet list of the key points, in the document's language — no heading, no preamble.",
+						? "Continue the user's document. Reply with ONLY the continuation in Markdown, a paragraph or two (or matching list items if a list is open), matching the document's tone, language, and formatting. No preamble."
+						: "Summarize the user's document. Reply with ONLY a concise Markdown bullet list of the key points, in the document's language: no heading, no preamble.",
 				messages: [{ role: "user", content: context }],
 			});
 			const out = msg.content
@@ -5632,7 +5632,7 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	/** Click the emoji on a rendered callout title: pick a new one and write it
-	 *  back — through the editor in Live Preview, through the file in Reading. */
+	 *  back, through the editor in Live Preview, through the file in Reading. */
 	private swapCalloutEmoji(span: HTMLElement) {
 		this.pickEmoji(span, (ch) => {
 			const callout = span.closest(".callout") as HTMLElement | null;
@@ -5739,7 +5739,7 @@ export default class PowerEditorPlugin extends Plugin {
 
 	/* ---------------- callout picker ---------------- */
 
-	/** Pick a callout flavor — or a collapsible toggle block. Each row carries
+	/** Pick a callout flavor, or a collapsible toggle block. Each row carries
 	 *  its emoji so the menu shows exactly what the callout will wear. */
 	private showCalloutMenu(pick: (spec: CalloutSpec) => void, at?: { x: number; y: number }) {
 		const menu = new Menu();
@@ -5762,7 +5762,7 @@ export default class PowerEditorPlugin extends Plugin {
 		this.showCalloutMenu((spec) => this.turnCurrentInto(ed, "callout", spec), at ?? this.cursorPoint());
 	}
 
-	/** Turn the block at the cursor into one named flavor, skipping the picker —
+	/** Turn the block at the cursor into one named flavor, skipping the picker
 	 *  what the toolbar's flavor rows and the `/tip`-style slash items use. */
 	calloutOfType(ed: Editor, type: string) {
 		const f = CALLOUT_FLAVORS.find((x) => x.type === type);
@@ -5793,7 +5793,7 @@ export default class PowerEditorPlugin extends Plugin {
 
 	/** Scan every markdown file under `root` ("" is the whole vault) for
 	 *  placeholders and hand the results to the preview modal. Nothing is
-	 *  written here — a vault-wide rewrite gets looked at before it happens. */
+	 *  written here, a vault-wide rewrite gets looked at before it happens. */
 	openPlaceholderSweep(root = "") {
 		const prefix = root ? root.replace(/\/$/, "") + "/" : "";
 		const files = this.app.vault.getMarkdownFiles().filter((f) => f.path.startsWith(prefix));
@@ -5824,7 +5824,7 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	/** Scan every markdown file under `root` ("" is the whole vault) for lead-ins
-	 *  and hand the results to the preview modal. Nothing is written here — the
+	 *  and hand the results to the preview modal. Nothing is written here, the
 	 *  modal is where a vault-wide rewrite gets looked at before it happens. */
 	openCalloutConverter(root = "") {
 		const prefix = root ? root.replace(/\/$/, "") + "/" : "";
@@ -5965,7 +5965,7 @@ export default class PowerEditorPlugin extends Plugin {
 			})
 		);
 		// The hover handle hides by the time the menu opens, zeroing its rect
-		// and dumping the menu at the window corner — anchor on the block's
+		// and dumping the menu at the window corner, anchor on the block's
 		// first visible glyph (robust when a heading's "#" is hidden), with a
 		// still-visible handle winning when it has real bounds.
 		let at = { x: 100, y: 100 };
@@ -6335,7 +6335,7 @@ export default class PowerEditorPlugin extends Plugin {
 		this.bubbleHeadingLabel?.setText(hlabel);
 	}
 
-	/** Inline-mark detection straight from CodeMirror's syntax tree — exact
+	/** Inline-mark detection straight from CodeMirror's syntax tree, exact
 	 *  where marker-counting can be fooled. Null when no tree is available. */
 	private treeMarks(view: MarkdownView): { bold: boolean; italic: boolean; highlight: boolean; strike: boolean; code: boolean } | null {
 		const cm = this.cmOf(view);
@@ -6415,7 +6415,7 @@ export default class PowerEditorPlugin extends Plugin {
 			try {
 				if (cm.state.doc.lineAt(cm.posAtDOM(child)).number - 1 === lineNo) return child.getBoundingClientRect();
 			} catch {
-				/* a child CM can't map — skip it */
+				/* a child CM can't map, skip it */
 			}
 		}
 		return null;
@@ -6427,7 +6427,7 @@ export default class PowerEditorPlugin extends Plugin {
 	 *  the legacy purpose-built `[!transcript]` callout
 	 *  (`.callout[data-callout="transcript"]` / `.pa-transcript`, source header
 	 *  `> [!transcript]`), and the migrated plain speaker lines under a
-	 *  `## Transcript` heading — each turn stamped `.cm-line.pa-lp-tr` in Live
+	 *  `## Transcript` heading: each turn stamped `.cm-line.pa-lp-tr` in Live
 	 *  Preview and matched in source by isTranscriptTurnAt. Detect either by the
 	 *  rendered marker under the pointer or by the hovered source line. Narrow on
 	 *  purpose: every other callout, and ordinary prose, keeps its affordances. */
@@ -6445,7 +6445,7 @@ export default class PowerEditorPlugin extends Plugin {
 		const target = e.target as HTMLElement | null;
 		if (target?.closest(".ped-handle")) return; // hovering the handle itself keeps it
 		// keep the handle alive while the pointer travels the corridor between
-		// the text and the grip — hiding here was why grabs kept failing
+		// the text and the grip, hiding here was why grabs kept failing
 		if (this.handleEl && this.handleEl.isShown()) {
 			const r = this.handleEl.getBoundingClientRect();
 			if (e.clientX > r.left - 16 && e.clientX < r.right + 40 && e.clientY > r.top - 14 && e.clientY < r.bottom + 14) {
@@ -6492,7 +6492,7 @@ export default class PowerEditorPlugin extends Plugin {
 			return;
 		}
 		// Power Assistant's [!transcript] callout owns its own speaker/comment
-		// interactions — don't shadow them with our grip (or the menu it opens).
+		// interactions, don't shadow them with our grip (or the menu it opens).
 		if (this.isTranscriptCallout(e.target, lines, lineNo)) {
 			this.hideHandle();
 			return;
@@ -6577,7 +6577,7 @@ export default class PowerEditorPlugin extends Plugin {
 		const lines = this.docLines(d.cm, d.view.editor);
 		// nearest boundary: before the hovered block, or after it when the
 		// pointer is past its midpoint (which is the next start, or EOF).
-		// A widget's rendered box gives the true midpoint — its source is one
+		// A widget's rendered box gives the true midpoint, its source is one
 		// line, so coordsAtPos would collapse top and bottom together.
 		const r = blockRangeAt(lines, lineNo);
 		let target: number;
@@ -6828,7 +6828,7 @@ interface SlashItem {
 	action: (ed: Editor, plugin: PowerEditorPlugin) => void;
 }
 
-/** Type "/" at the start of a line (or after a space) for the insert menu —
+/** Type "/" at the start of a line (or after a space) for the insert menu
  *  structure, snippets, and the rest of the Power family. */
 class SlashSuggest extends EditorSuggest<SlashItem> {
 	constructor(private plugin: PowerEditorPlugin) {
@@ -6952,7 +6952,7 @@ class CalloutConvertModal extends Modal {
 	private found = new Map<TFile, CalloutLead[]>();
 	private bare = false;
 	private scanning = true;
-	private cancelled = false;
+	private canceled = false;
 	private listEl!: HTMLElement;
 	private summaryEl!: HTMLElement;
 	private go!: HTMLButtonElement;
@@ -6996,7 +6996,7 @@ class CalloutConvertModal extends Modal {
 	 *  every chunk, so a long scan looks like a scan and not a hang. */
 	private async scan() {
 		const CHUNK = 64;
-		for (let i = 0; i < this.files.length && !this.cancelled; i += CHUNK) {
+		for (let i = 0; i < this.files.length && !this.canceled; i += CHUNK) {
 			const batch = this.files.slice(i, i + CHUNK);
 			const reads = await Promise.all(
 				batch.map(async (f): Promise<[TFile, CalloutLead[]]> => {
@@ -7011,7 +7011,7 @@ class CalloutConvertModal extends Modal {
 			const done = Math.min(i + CHUNK, this.files.length);
 			this.summaryEl.setText(`Scanning ${done.toLocaleString()} of ${this.files.length.toLocaleString()} notes…`);
 		}
-		if (this.cancelled) return;
+		if (this.canceled) return;
 		this.scanning = false;
 		this.render();
 	}
@@ -7079,19 +7079,19 @@ class CalloutConvertModal extends Modal {
 	}
 
 	onClose() {
-		this.cancelled = true; // a scan still in flight stops reading the vault
+		this.canceled = true; // a scan still in flight stops reading the vault
 		this.contentEl.empty();
 	}
 }
 
 /** The vault-wide placeholder sweep. Deliberately the same shape as the
- *  callout converter — chunked scan, a list you read before anything is
- *  written, counts on the button — and it borrows that modal's CSS rather
+ *  callout converter, chunked scan, a list you read before anything is
+ *  written, counts on the button, and it borrows that modal's CSS rather
  *  than growing a second set of classes that look the same. */
 class PlaceholderSweepModal extends Modal {
 	private found = new Map<TFile, PlaceholderTag[]>();
 	private scanning = true;
-	private cancelled = false;
+	private canceled = false;
 	private listEl!: HTMLElement;
 	private summaryEl!: HTMLElement;
 	private go!: HTMLButtonElement;
@@ -7105,7 +7105,7 @@ class PlaceholderSweepModal extends Modal {
 		const where = this.root ? `“${this.root}”` : "your vault";
 		this.contentEl.createEl("p", {
 			cls: "ped-convert-intro",
-			text: `Looks through ${where} for angle-bracket placeholders like <AppFeature>. Obsidian reads one of those as an HTML tag that never closes, and from there Live Preview stops rendering Markdown for the rest of the note — headings, bold and links below it all come out as raw source. Escaping leaves the text reading exactly as written and gets the rendering back. Real HTML and anything inside code is left alone.`,
+			text: `Looks through ${where} for angle-bracket placeholders like <AppFeature>. Obsidian reads one of those as an HTML tag that never closes, and from there Live Preview stops rendering Markdown for the rest of the note, headings, bold and links below it all come out as raw source. Escaping leaves the text reading exactly as written and gets the rendering back. Real HTML and anything inside code is left alone.`,
 		});
 		this.summaryEl = this.contentEl.createDiv({
 			cls: "ped-convert-summary",
@@ -7125,7 +7125,7 @@ class PlaceholderSweepModal extends Modal {
 	 *  awaiting each read in turn spends the scan waiting on disk latency. */
 	private async scan() {
 		const CHUNK = 64;
-		for (let i = 0; i < this.files.length && !this.cancelled; i += CHUNK) {
+		for (let i = 0; i < this.files.length && !this.canceled; i += CHUNK) {
 			const batch = this.files.slice(i, i + CHUNK);
 			const reads = await Promise.all(
 				batch.map(async (f): Promise<[TFile, PlaceholderTag[]]> => {
@@ -7140,7 +7140,7 @@ class PlaceholderSweepModal extends Modal {
 			const done = Math.min(i + CHUNK, this.files.length);
 			this.summaryEl.setText(`Scanning ${done.toLocaleString()} of ${this.files.length.toLocaleString()} notes…`);
 		}
-		if (this.cancelled) return;
+		if (this.canceled) return;
 		this.scanning = false;
 		this.render();
 	}
@@ -7199,7 +7199,7 @@ class PlaceholderSweepModal extends Modal {
 	}
 
 	onClose() {
-		this.cancelled = true; // a scan still in flight stops reading the vault
+		this.canceled = true; // a scan still in flight stops reading the vault
 		this.contentEl.empty();
 	}
 }
@@ -7632,11 +7632,11 @@ class PowerEditorSettingTab extends PluginSettingTab {
 			"Space under headings",
 			"Markdown puts a blank line under a heading, and in editing view that line takes a full line's height. This shrinks it so a heading sits closer to what it introduces.",
 			"headingGap",
-			"A normal line is about 24px, so Half is half. Type your own number in the box for anything in between (0 to 60). None removes the gap entirely — the blank line stays in the file, so the Markdown is unchanged, it just stops taking up room. Editing view only; the cursor looks short while it sits on that line and returns to normal as soon as you type."
+			"A normal line is about 24px, so Half is half. Type your own number in the box for anything in between (0 to 60). None removes the gap entirely, the blank line stays in the file, so the Markdown is unchanged, it just stops taking up room. Editing view only; the cursor looks short while it sits on that line and returns to normal as soon as you type."
 		);
 		gapSetting(
 			"Space around tables",
-			"A table has a blank line on both sides and Markdown needs both — delete one and the table stops being a table. This shrinks them, and trims the table's own bottom padding to match.",
+			"A table has a blank line on both sides and Markdown needs both, delete one and the table stops being a table. This shrinks them, and trims the table's own bottom padding to match.",
 			"tableGap",
 			"Set independently of headings, because a table usually wants a little more room than a paragraph does. Where a table follows a heading directly, the heading setting wins, so a heading sits the same distance from whatever comes next. The table's bottom padding never goes below 6px, so the row drag handles keep their room."
 		);
@@ -7659,7 +7659,7 @@ class PowerEditorSettingTab extends PluginSettingTab {
 			.then((st) =>
 				help(
 					st,
-					"Reads the file's own modified time, so it is right without you maintaining anything. If a note has an `updated:` (or `modified:`) property in its frontmatter, that wins instead — useful in a synced vault, where the sync client can rewrite the file's modified time when a note arrives from another device and make it look freshly edited."
+					"Reads the file's own modified time, so it is right without you maintaining anything. If a note has an `updated:` (or `modified:`) property in its frontmatter, that wins instead, useful in a synced vault, where the sync client can rewrite the file's modified time when a note arrives from another device and make it look freshly edited."
 				)
 			);
 		new Setting(c)
@@ -7722,7 +7722,7 @@ class PowerEditorSettingTab extends PluginSettingTab {
 			.then((st) =>
 				help(
 					st,
-					"A dark code block inside a light note is what Claude, ChatGPT, and most documentation sites do, because saturated syntax colors need a dark surface to sit on. Vivid Light keeps the light background with stronger colors than Obsidian's own. Whichever you pick, code only takes color when the fence names a language — use the language button on the block to set or change it."
+					"A dark code block inside a light note is what Claude, ChatGPT, and most documentation sites do, because saturated syntax colors need a dark surface to sit on. Vivid Light keeps the light background with stronger colors than Obsidian's own. Whichever you pick, code only takes color when the fence names a language, use the language button on the block to set or change it."
 				)
 			);
 		new Setting(c)

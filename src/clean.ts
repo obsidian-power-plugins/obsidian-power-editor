@@ -92,7 +92,7 @@ function topLevelTags(html: string, names: string[]): Span[] {
 	let attrs = "";
 	let m: RegExpExecArray | null;
 	while ((m = re.exec(html))) {
-		if (m[3] === "/") continue; // <td/> — self-closed, nothing to collect
+		if (m[3] === "/") continue; // <td/>, self-closed, nothing to collect
 		if (!m[1]) {
 			if (depth++ === 0) {
 				start = re.lastIndex;
@@ -233,8 +233,8 @@ export function padPastedMarkdown(md: string, before: string, after: string): st
 /* ---------------- placeholder tags ---------------- */
 
 /* Every element Obsidian or the toolbar might legitimately write. Anything
- * else in angle brackets is a placeholder someone typed — <AppFeature>,
- * <ModuleORFeature> — which Obsidian reads as an unclosed HTML tag, and from
+ * else in angle brackets is a placeholder someone typed, <AppFeature>,
+ * <ModuleORFeature>, which Obsidian reads as an unclosed HTML tag, and from
  * that point Live Preview stops parsing Markdown for the rest of the note:
  * headings, emphasis and links downstream of it all render as raw source. */
 const HTML_TAGS = new Set(
@@ -264,7 +264,7 @@ function outsideCode(md: string, fn: (s: string, lineNo: number) => string): str
 			}
 			if (fenced) return line;
 			// A link destination is not inline-parsed, so a placeholder inside
-			// one is already harmless — and escaping it would push backslashes
+			// one is already harmless, and escaping it would push backslashes
 			// into the URL itself. Only the link text is scanned.
 			return line
 				.split(/(`+[^`]*`+|\]\([^)]*\))/)

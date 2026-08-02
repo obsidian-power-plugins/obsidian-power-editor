@@ -2,7 +2,7 @@
  * Capture's transcription calls: any OpenAI-compatible /audio/transcriptions
  * endpoint (Groq, OpenAI, self-hosted Whisper). Covered by tests.ts. */
 
-/** Encode a multipart/form-data body by hand — Obsidian's requestUrl takes an
+/** Encode a multipart/form-data body by hand, Obsidian's requestUrl takes an
  *  ArrayBuffer, not FormData. */
 export function buildMultipart(
 	fields: Record<string, string>,

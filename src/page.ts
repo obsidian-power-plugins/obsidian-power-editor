@@ -1,7 +1,7 @@
 /* Pure logic for the Notion-style page features: covers (a banner image or
  * gradient declared in frontmatter), inline comments (%%💬 …%% markers, plain
  * markdown that reading view naturally omits), and page verification (a
- * frontmatter date with an optional expiry). No Obsidian imports — all of
+ * frontmatter date with an optional expiry). No Obsidian imports: all of
  * this is covered by tests.ts. */
 
 /* ---------------- covers ---------------- */

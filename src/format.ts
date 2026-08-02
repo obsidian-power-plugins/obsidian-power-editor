@@ -7,7 +7,7 @@ export function headingLevel(line: string): number {
 }
 
 /** Set (1-6) or remove (0) the heading level of one line, leaving any list or
- *  quote markers alone — headings inside quotes keep their "> " prefix. */
+ *  quote markers alone, headings inside quotes keep their "> " prefix. */
 export function setHeading(line: string, level: number): string {
 	const m = line.match(/^(\s*(?:>\s*)?)(#{1,6}\s+)?(.*)$/) as RegExpMatchArray;
 	const prefix = m[1];
@@ -25,7 +25,7 @@ export function emptyHeadingLabel(line: string): string | null {
 
 /** Where the caret should snap to when it lands before a heading's marker,
  *  or null to leave it. WYSIWYG hides the "# ", so without this a click at
- *  the line's visual start puts the caret at offset 0 — and typing there
+ *  the line's visual start puts the caret at offset 0, and typing there
  *  produces "text# " instead of a heading. Notion makes the marker
  *  unreachable; this does the same. */
 export function headingCursorSnap(lineText: string, offsetInLine: number): number | null {
@@ -107,8 +107,8 @@ export interface OrderedInfo {
 }
 
 /** What pressing Enter at the end of `line` should do inside a plain-text list
- *  editor (the tab edit box): continue the list with the next marker, or — on
- *  an empty item — end it by clearing the marker back to its indent. Null when
+ *  editor (the tab edit box): continue the list with the next marker, or, on
+ *  an empty item, end it by clearing the marker back to its indent. Null when
  *  the line isn't a list item. */
 export function continueList(line: string): { insert: string } | { clear: string } | null {
 	const om = line.match(/^(\s*)(\d+)([.)])[ \t]+(.*)$/);
@@ -226,7 +226,7 @@ export function hasAnyMark(m: Marks): boolean {
 	return m.bold || m.italic || m.underline || m.strike || m.highlight || m.color != null;
 }
 
-/** Which HTML wrappers enclose the ch-range on this line — needed because a
+/** Which HTML wrappers enclose the ch-range on this line, needed because a
  *  WYSIWYG selection contains only the inner text, never the tags around it. */
 export function wrapperAt(line: string, chFrom: number, chTo: number): { underline: boolean; color: string | null; highlighted: boolean } {
 	const encloses = (re: RegExp): RegExpExecArray | null => {
@@ -286,7 +286,7 @@ export function toggleScript(text: string, tag: "sub" | "sup"): string {
 	return `<${tag}>${stripped}</${tag}>`;
 }
 
-/** The Clear-formatting button: a whole line back to plain text — heading
+/** The Clear-formatting button: a whole line back to plain text, heading
  *  gone, alignment gone, inline marks and HTML gone. Structure survives:
  *  list markers, quotes, and links keep working. */
 export function clearAllFormatting(line: string): string {
@@ -297,7 +297,7 @@ export function clearAllFormatting(line: string): string {
  *  wrapper an endpoint sits inside: ==highlight==, <mark …>…</mark>,
  *  <span style="color…">…</span>, and Markdown emphasis (**bold**, *italic*,
  *  _italic_, ~~strike~~). WYSIWYG hides those markers, so a selection of the
- *  visible text lands INSIDE them — transforming the raw selection would nest
+ *  visible text lands INSIDE them, transforming the raw selection would nest
  *  new wrappers or miss the old ones. Swallowing emphasis also means a color
  *  or highlight wraps AROUND the **, keeping it inside the tag (<mark>**x**
  *  </mark>) where the engine can still render it as bold. */
@@ -341,7 +341,7 @@ export function expandStyleRange(line: string, from: number, to: number): { from
  *  bogus highlights, so when removing, stray == tokens go too.
  *
  *  Semantics are deliberately conservative so technical prose survives:
- *  - Pairs match only FLUSH spans (==text==), mirroring Obsidian's renderer —
+ *  - Pairs match only FLUSH spans (==text==), mirroring Obsidian's renderer
  *    "a == b" is an equality operator, not a highlight, and stays.
  *  - A stray == is removed only when it hugs plain text (letter, digit, or
  *    sentence punctuation). Spaced tokens ( == ), parenthesized (==),
@@ -407,7 +407,7 @@ export function sweepHighlights(text: string, background: string | null): { text
 
 /** Strip inline formatting from text: Markdown emphasis, highlight, code, and
  *  the inline HTML the toolbar can write (u/span/mark…). Links keep their text
- *  and target — clearing style shouldn't destroy where things point. */
+ *  and target, clearing style shouldn't destroy where things point. */
 export function stripFormatting(text: string): string {
 	let t = text;
 	for (let i = 0; i < 3; i++) {
@@ -429,7 +429,7 @@ const COPY_TAGS = /<\/?(?:u|b|i|em|strong|s|small|sub|sup|mark|span|font)(?:\s[^
 /** Clean a copied Markdown selection for pasting into other apps. "clean"
  *  peels off the inline HTML the toolbar writes (<mark>, color/size <span>,
  *  <u>, <sub>, <sup>, <font>) and unwraps ==highlights==, leaving Markdown
- *  emphasis like **bold** intact — so a highlighted line stops pasting its raw
+ *  emphasis like **bold** intact, so a highlighted line stops pasting its raw
  *  tags. "plain" strips that emphasis and heading hashes too, for text with no
  *  markup at all. Inline code and fenced blocks pass through verbatim, so an
  *  == operator or a literal tag inside code is never touched. */
@@ -518,8 +518,8 @@ export function olTypeForDepth(depth: number): "1" | "a" | "i" {
 
 /** The same thing said in CSS. The `type` attribute alone is not enough: the
  *  current Outlook is the web client in a desktop shell, and its editor
- *  normalises a pasted list, dropping attributes it did not write while
- *  keeping inline styles. Sending both covers the clients that honour either. */
+ *  normalizes a pasted list, dropping attributes it did not write while
+ *  keeping inline styles. Sending both covers the clients that honor either. */
 export function olStyleForDepth(depth: number): "decimal" | "lower-alpha" | "lower-roman" {
 	const t = olTypeForDepth(depth);
 	return t === "a" ? "lower-alpha" : t === "i" ? "lower-roman" : "decimal";

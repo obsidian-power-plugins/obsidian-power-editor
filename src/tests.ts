@@ -335,7 +335,7 @@ eq(stripCalloutLead("Important: the limit is removed", "warning"), "the limit is
 eq(stripCalloutLead("Important: the limit is removed", "tip"), "Important: the limit is removed", "...so a tip does not claim it");
 eq(stripCalloutLead("Tip: something", "warning"), "Tip: something", "a label for another type stays");
 eq(stripCalloutLead("Ratio: 3 to 1", "tip"), "Ratio: 3 to 1", "an unrelated label stays");
-eq(stripCalloutLead("Tip:", "tip"), "Tip:", "a line that is only the label stays — nothing would be left");
+eq(stripCalloutLead("Tip:", "tip"), "Tip:", "a line that is only the label stays, nothing would be left");
 eq(
 	doc(transformBlock(L("**Tip:** Download from the Mac App Store"), { from: 0, to: 0 }, "callout", { type: "tip", emoji: "💡" })),
 	"> [!tip] 💡 Download from the Mac App Store",
@@ -577,7 +577,7 @@ eq(setFontSize('<span style="font-size:0.85em">hello</span>', "1.6em"), '<span s
 eq(setFontSize('<span style="font-size:1.6em">hello</span>', null), "hello", "Normal removes the wrapper");
 eq(toggleScript("x2", "sup"), "<sup>x2</sup>", "superscript wraps");
 eq(toggleScript("<sup>x2</sup>", "sup"), "x2", "superscript toggles back off");
-eq(toggleScript("<sup>x2</sup>", "sub"), "<sub>x2</sub>", "sub replaces sup — they're exclusive");
+eq(toggleScript("<sup>x2</sup>", "sub"), "<sub>x2</sub>", "sub replaces sup, they're exclusive");
 
 // --- duplicate / delete / block ids ---
 const DUP = duplicateBlock(L("para\n\nnext"), { from: 0, to: 0 });
@@ -676,7 +676,7 @@ eq(
 	"| Feature | Air 15 |\n| --- | --- |\n| Weight | 3.3 lb |\n| Cooling | Fanless |",
 	"a thead table converts row for row"
 );
-// Claude: no thead at all, row labels as <th> — the old path flattened this into one paragraph
+// Claude: no thead at all, row labels as <th>, the old path flattened this into one paragraph
 eq(
 	tableToMarkdown("<table><tbody><tr><td></td><td>Air 15</td><td>Pro 14</td></tr><tr><th>Chip</th><td>M5</td><td>M5 Pro</td></tr></tbody></table>", asMd),
 	"|  | Air 15 | Pro 14 |\n| --- | --- | --- |\n| Chip | M5 | M5 Pro |",
@@ -758,7 +758,7 @@ eq(findPlaceholderTags("\\<Foo>").length, 0, "an escaped tag is not reported aga
 eq(findPlaceholderTags(escapePlaceholderTags("<Foo> <Bar>")).length, 0, "escaping clears everything the scan found");
 
 // a link destination is not inline-parsed, so a placeholder there is already
-// harmless — and escaping it would push backslashes into the URL
+// harmless, and escaping it would push backslashes into the URL
 eq(findPlaceholderTags("[text](http://<WLED-IP>/json)").length, 0, "a placeholder in a link destination is not reported");
 eq(escapePlaceholderTags("[text](http://<WLED-IP>/json)"), "[text](http://<WLED-IP>/json)", "a link destination is never rewritten");
 eq(escapePlaceholderTags("[a <Foo> b](http://x/<Bar>)"), "[a \\<Foo> b](http://x/<Bar>)", "link text is still escaped while its destination is left alone");
@@ -1316,7 +1316,7 @@ eq(stripFrontmatter("Body --- with dashes"), "Body --- with dashes", "dashes mid
 
 // the marker that makes a rich copy survive being pasted back into Obsidian
 {
-	const md = "- [[A note]] — with an em dash, an emoji 🎉, and \"quotes\"";
+	const md = "- [[A note]], with an em dash, an emoji 🎉, and \"quotes\"";
 	const wrapped = wrapWithMarkdown("<ul><li>A note</li></ul>", md);
 	eq(markdownFromMarker(wrapped), md, "the Markdown survives the round trip, non-Latin-1 and all");
 	ok(wrapped.includes("<ul><li>A note</li></ul>"), "and the readable HTML is still what a mail client sees");

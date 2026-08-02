@@ -2,7 +2,7 @@
 //
 // This exists because it happened twice: another machine had published a newer
 // Power Editor, Power Connect synced it into the vault, and a deploy from here
-// overwrote it with an older build — then propagated that downgrade back out to
+// overwrote it with an older build, then propagated that downgrade back out to
 // every other device. A check that only PRINTS a warning is not a check; this
 // one exits non-zero so `npm run deploy` stops before copying anything.
 //
@@ -43,7 +43,7 @@ for (const vault of vaults) {
 	try {
 		installed = JSON.parse(readFileSync(mf, "utf8")).version;
 	} catch {
-		console.log(`  ${vault}: manifest unreadable (corrupt?) — deploy will replace it`);
+		console.log(`  ${vault}: manifest unreadable (corrupt?), deploy will replace it`);
 		continue;
 	}
 	const rel = cmp(mine.version, installed);
@@ -60,5 +60,5 @@ if (blocked) {
 			`then rebuild on top of it. Override with FORCE_DEPLOY=1 only if you mean it.\n`
 	);
 	if (process.env.FORCE_DEPLOY !== "1") process.exit(1);
-	console.error("FORCE_DEPLOY=1 set — deploying anyway.\n");
+	console.error("FORCE_DEPLOY=1 set, deploying anyway.\n");
 }

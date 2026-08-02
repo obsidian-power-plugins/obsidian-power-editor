@@ -1,6 +1,6 @@
 /* Pure block logic for the drag handles and move commands: given the note as
  * lines, work out what "the block under this line" is, where blocks begin, and
- * what the document looks like after moving one. No Obsidian imports — all of
+ * what the document looks like after moving one. No Obsidian imports: all of
  * this is covered by tests.ts. */
 
 export interface BlockRange {
@@ -111,7 +111,7 @@ export function blockRangeAt(lines: string[], line: number): BlockRange | null {
  *  a quote line, and the top of its contiguous quote run must carry the
  *  transcript header. Power Assistant renders the meeting transcript as one of
  *  these and owns its own speaker/comment interactions, so Power Editor keeps
- *  its block grip and callout menu off it. Narrow by design — the header type
+ *  its block grip and callout menu off it. Narrow by design, the header type
  *  must be exactly `transcript`, so every other callout is untouched. */
 export function isTranscriptCalloutAt(lines: string[], line: number): boolean {
 	if (line < 0 || line >= lines.length || !isQuoteLine(lines[line])) return false;
@@ -127,7 +127,7 @@ export function isTranscriptCalloutAt(lines: string[], line: number): boolean {
  *  each turn with a speaker avatar in Live Preview. Those turns own their own
  *  interactions and are never individually reordered, so Power Editor keeps its
  *  block grip and callout menu off them. Narrow by design: the line must BOTH
- *  look like a speaker turn AND live in the Transcript section — the nearest
+ *  look like a speaker turn AND live in the Transcript section, the nearest
  *  heading above it must be exactly `## Transcript` (the section runs to the next
  *  heading of any level), so ordinary prose, even a bold `**Note:**` lead-in
  *  elsewhere, keeps its affordances. Mirrors Power Assistant's own section scan
@@ -141,7 +141,7 @@ export function isTranscriptTurnAt(lines: string[], line: number): boolean {
 	return false; // no heading above → not in a Transcript section
 }
 
-/** First lines of every block, in order — the valid drop boundaries (plus the
+/** First lines of every block, in order, the valid drop boundaries (plus the
  *  end of the document, which callers represent as lines.length). */
 export function blockStarts(lines: string[]): number[] {
 	const starts: number[] = [];
@@ -187,7 +187,7 @@ export function sectionRangeAt(lines: string[], line: number): BlockRange | null
 	return { from: base.from, to };
 }
 
-/** The union of the blocks touched by lines a..b — how a selection spanning
+/** The union of the blocks touched by lines a..b, how a selection spanning
  *  several blocks becomes one draggable unit. */
 export function unionBlockRange(lines: string[], a: number, b: number, sections = false): BlockRange | null {
 	let lo = Math.min(a, b);
@@ -205,8 +205,8 @@ export function unionBlockRange(lines: string[], a: number, b: number, sections 
 export type BlockKind = "paragraph" | "h1" | "h2" | "h3" | "bullet" | "ordered" | "task" | "quote" | "callout" | "toggleList";
 
 /** Widen a list item's range to the whole contiguous list at its indent, so a
- *  "turn into toggle" converts the list — first item as the title, the rest as
- *  children — instead of wrapping one bullet and stranding its siblings.
+ *  "turn into toggle" converts the list, first item as the title, the rest as
+ *  children, instead of wrapping one bullet and stranding its siblings.
  *  Non-list ranges pass through unchanged. */
 export function listStretchRange(lines: string[], range: BlockRange): BlockRange {
 	const lm = listMatch(lines[range.from] ?? "");
@@ -265,7 +265,7 @@ function stripLinePrefixes(l: string): string {
 }
 
 /** Which callout to become: type ("note", "tip", "warning"…) and whether it
- *  starts folded — a folded callout is a Notion-style toggle block, so the
+ *  starts folded, a folded callout is a Notion-style toggle block, so the
  *  block's first line becomes its always-visible title. */
 export interface CalloutSpec {
 	type: string;
@@ -297,7 +297,7 @@ export const CALLOUT_FLAVORS: CalloutFlavor[] = [
 	{ type: "quote", label: "Quote", icon: "quote", emoji: "💬" },
 ];
 
-/** Lead-in labels people hand-type ahead of the sentence — "Tip:", "**Note:**".
+/** Lead-in labels people hand-type ahead of the sentence, "Tip:", "**Note:**".
  *  Turning such a line into that same callout drops the label, because the
  *  callout's own icon, color, and title already say it. Aliases are listed per
  *  type so "Caution:" reads as a warning and "Hint:" as a tip.
@@ -322,8 +322,8 @@ const CALLOUT_LEADS: Record<string, string[]> = {
 const CALLOUT_LEAD_RE = /^\s*(\*\*|__|\*|_)?\s*([A-Za-z][A-Za-z. ]{0,15}?)\s*(?::\s*\1|\1\s*:)\s+/;
 
 /** Drop a lead-in label from `text` when it names the callout type it is
- *  becoming. Anything else — a different label, or a line that is only the
- *  label — comes back untouched. */
+ *  becoming. Anything else, a different label, or a line that is only the
+ *  label, comes back untouched. */
 export function stripCalloutLead(text: string, type: string): string {
 	const leads = CALLOUT_LEADS[type];
 	if (!leads) return text;
@@ -359,7 +359,7 @@ export interface CalloutLead {
 	type: string;
 	/** the label as written, for the preview. */
 	label: string;
-	/** true when the label carried no bold/italic — the riskier form, since
+	/** true when the label carried no bold/italic, the riskier form, since
 	 *  plain prose can open with a word and a colon. */
 	bare: boolean;
 }
@@ -435,7 +435,7 @@ export function transformBlock(lines: string[], range: BlockRange, kind: BlockKi
 		.filter((p, i, a) => p.core.trim() !== "" || (i > 0 && i < a.length - 1));
 	const core = kept.map((p) => p.core);
 	const raw = kept.map((p) => p.raw);
-	// the block's own indent — a nested list converts in place, not at column 0
+	// the block's own indent, a nested list converts in place, not at column 0
 	const base = raw[0]?.match(/^\s*/)?.[0] ?? "";
 	let out: string[];
 	switch (kind) {
@@ -465,8 +465,8 @@ export function transformBlock(lines: string[], range: BlockRange, kind: BlockKi
 			break;
 		case "toggleList": {
 			// Notion's toggle list: a bullet whose indented children fold under
-			// it natively. A short first line rides the bullet as the title —
-			// even alone, matching Notion's empty toggle — while a blob leaves
+			// it natively. A short first line rides the bullet as the title
+			// even alone, matching Notion's empty toggle, while a blob leaves
 			// the bullet empty to type into. Body list items keep their own
 			// markers: former siblings shift one level deeper, and anything
 			// already indented under the first line is a child that stays put.
@@ -491,7 +491,7 @@ export function transformBlock(lines: string[], range: BlockRange, kind: BlockKi
 			if (core.length) core[0] = stripCalloutLead(core[0], c.type);
 			// The first line becomes the toggle's title only when it reads like
 			// one: a short line. A one-line blob (a pasted transcript) must fold
-			// as BODY under an empty title — otherwise the whole thing lands in
+			// as BODY under an empty title, otherwise the whole thing lands in
 			// the always-visible bold title and there is nothing left to collapse.
 			const em = c.emoji ? c.emoji + " " : "";
 			const title = core[0]?.trim() ?? "";
@@ -707,7 +707,7 @@ export function moveBlock(
 }
 
 /** A cheap read of what a fenced block probably is, from its opening lines.
- *  Only used to float the likely answer to the top of the picker — nothing is
+ *  Only used to float the likely answer to the top of the picker, nothing is
  *  written without a choice. */
 export function guessLanguage(lines: string[]): string | null {
 	const head = lines.join("\n");
@@ -728,7 +728,7 @@ export function guessLanguage(lines: string[]): string | null {
  *
  *  Block operations rebuild the note as an array of lines, and writing that
  *  whole array back is one transaction spanning the entire document. Every
- *  fold, and anything else anchored to a position, dies with it — collapse a
+ *  fold, and anything else anchored to a position, dies with it, collapse a
  *  dozen headings, delete one block, and all twelve spring open. Narrowing
  *  the edit to the lines that changed leaves every position outside it alone.
  *
@@ -785,7 +785,7 @@ export function stripTags(s: string): string {
  *  it belongs to.
  *
  *  Pressing Enter at the visual start of an item normally splits it, and in
- *  WYSIWYG mode "the visual start" sits inside hidden inline HTML — a `<mark>`
+ *  WYSIWYG mode "the visual start" sits inside hidden inline HTML, a `<mark>`
  *  from the highlighter, a `<strong>` from bold. Worse, clicking there yields a
  *  selection covering that hidden tag rather than a cursor, so Enter replaces
  *  it and takes the item's content with it. What people mean by that keystroke
