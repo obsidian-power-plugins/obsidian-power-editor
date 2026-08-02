@@ -4,7 +4,7 @@ A rich formatting toolbar, a TipTap-style selection bubble, **block drag handles
 
 ## Three ways to format
 
-- **The toolbar** at the top of each note in editing view: undo/redo, a paragraph-style dropdown (Normal, H1-H6, showing the current style), bold, italic, underline, strikethrough, highlight color, inline code, text color, font size & sub/superscript, format painter, the three list types, quote, callout, alignment, indent/outdent, link, code block, insert table, horizontal rule, dictate, AI edits, and clear formatting. Every button reflects the cursor's formatting, detection reads CodeMirror's real syntax tree, so states are exact. Pick which buttons you want in settings.
+- **The toolbar** at the top of each note in editing view: undo/redo, a paragraph-style dropdown (Normal, H1-H6, showing the current style), bold, italic, underline, strikethrough, highlight color, inline code, text color, font size & sub/superscript, format painter, the three list types, quote, callout, alignment, indent/outdent, link, code block, insert table, horizontal rule, dictate, AI edits, and clear formatting. Every button reflects the cursor's formatting. Detection reads CodeMirror's real syntax tree, so states are exact. Pick which buttons you want in settings.
 - **The selection bubble**: select text and a compact bubble appears right there, bold/italic/underline/strike/highlight/code, color, link, format painter, AI edits, clear. Your hand never travels to the top of the pane.
 - **Slash commands**: type `/` for the insert menu, headings, lists, checklist, quote, callout (with a type picker, or straight to one: `/tip`, `/warning`, `/note`…), toggle block, code block, table, rule, today's date, dictate, plus the rest of the Power family when installed: record a meeting, capture a YouTube video, ask your vault, insert a totals row, embed a new base, open Recent Pages.
 
@@ -12,22 +12,22 @@ Every toolbar action is also a **command**, so anything can have a hotkey: under
 
 ## WYSIWYG mode
 
-Live Preview normally reveals `**`, `==`, `<u>`, and link brackets while the cursor is inside them. Power Editor keeps them hidden and styles the text live, bold looks bold, colors stay colored, links show only their text, headings never show their `#`. The markers still exist in the file; you just never see them. Toggle in settings.
+Live Preview normally reveals `**`, `==`, `<u>`, and link brackets while the cursor is inside them. Power Editor keeps them hidden and styles the text live. Bold looks bold, colors stay colored, links show only their text, headings never show their `#`. The markers still exist in the file; you just never see them. Toggle in settings.
 
 ## Blocks: drag, click, transform
 
 Hover any block for a grip in the margin:
 
 - **Drag it** to move the whole block (a paragraph, a list item with all its children, a table, quote, or code block) with a drop line showing the landing spot. **Headings carry their whole section** (everything until the next same-level heading); toggle that off to move heading lines alone. Select across several blocks first and the grip moves them together.
-- **Click it** for the block menu: **Turn into** (paragraph, headings, lists, checklist, quote, callout, callouts open a type picker: tip, note, info, success, question, warning, danger, example, quote, or a collapsible **toggle block**), **Duplicate**, **Copy link to block** (creates the `^id` and copies `[[note#^id]]`), **Move to top/bottom**, **Delete**.
-- Spacing is automatic (blank lines between prose, gluing inside lists), Escape cancels, the pane auto-scrolls at its edges, and every operation is one undo step. **Move block up / Move block down** commands use the same engine, bind them to `Alt+Shift+↑/↓`.
+- **Click it** for the block menu: **Turn into** (paragraph, headings, lists, checklist, quote, callout. Callouts open a type picker: tip, note, info, success, question, warning, danger, example, quote, or a collapsible **toggle block**), **Duplicate**, **Copy link to block** (creates the `^id` and copies `[[note#^id]]`), **Move to top/bottom**, **Delete**.
+- Spacing is automatic (blank lines between prose, gluing inside lists), Escape cancels, the pane auto-scrolls at its edges, and every operation is one undo step. **Move block up / Move block down** commands use the same engine. Bind them to `Alt+Shift+↑/↓`.
 
 ## Callouts that actually stand out
 
 The **callout button** (lightbulb, next to Quote) turns the block under the cursor into a tinted, accented box with a big icon: **Tip** 💡, **Note** 📝, **Info** ℹ️, **Success** ✅, **Question** ❓, **Warning** ⚠️, **Danger** 🚨, **Example** 🧪, **Quote** 💬. Each one is also a slash item and a bindable command, so `/tip` (or a hotkey) goes straight there without a second menu.
 
-- **The emoji is the icon**, Notion-style, click it in the rendered callout to swap it for any other. A callout you typed by hand keeps the type's own icon instead, so `> [!tip]` still shows a lightbulb (Obsidian's flame is retired here).
-- **The label goes.** Turn `**Tip:** Download from the App Store` into a Tip callout and you get `> [!tip] 💡 Download from the App Store`, the box already says "tip", so it doesn't say it twice. Works for the aliases too: "Caution:" becomes a warning, "Hint:" a tip.
+- **The emoji is the icon**, Notion-style. Click it in the rendered callout to swap it for any other. A callout you typed by hand keeps the type's own icon instead, so `> [!tip]` still shows a lightbulb (Obsidian's flame is retired here).
+- **The label goes.** Turn `**Tip:** Download from the App Store` into a Tip callout and you get `> [!tip] 💡 Download from the App Store`. The box already says "tip", so it doesn't say it twice. Works for the aliases too: "Caution:" becomes a warning, "Hint:" a tip.
 - Still plain Markdown: `> [!tip]`, which every other plugin, Reading view, mobile, and publish already understand.
 
 ### Converting notes you already have
