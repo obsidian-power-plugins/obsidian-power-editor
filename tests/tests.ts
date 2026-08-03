@@ -1,4 +1,4 @@
-import { mergeForSave, moveItem } from "./settings";
+import { mergeForSave, moveItem } from "../src/settings";
 import {
 	blockRangeAt,
 	blockStarts,
@@ -24,8 +24,8 @@ import {
 	tableSnippet,
 	transformBlock,
 	unionBlockRange,
-} from "./blocks";
-import { resizeEmbed } from "./embed";
+} from "../src/blocks";
+import { resizeEmbed } from "../src/embed";
 import {
 	editedAt,
 	GRADIENTS,
@@ -38,7 +38,7 @@ import {
 	relativeEdited,
 	replaceCommentText,
 	verificationState,
-} from "./page";
+} from "../src/page";
 import {
 	archiveCompleted,
 	formatTodo,
@@ -50,9 +50,9 @@ import {
 	setDueDate,
 	setPriority,
 	toggleTodo,
-} from "./tasks";
-import { cleanPastedHtml, escapePlaceholderTags, findPlaceholderTags, isOneMarkdownTable, looksLikeMarkdownTable, padPastedMarkdown, preCleanHtml, postCleanMarkdown, tableToMarkdown, tabbedTextToMarkdown } from "./clean";
-import { buildMultipart, planDictationInsert } from "./dictate";
+} from "../src/tasks";
+import { cleanPastedHtml, escapePlaceholderTags, findPlaceholderTags, isOneMarkdownTable, looksLikeMarkdownTable, padPastedMarkdown, preCleanHtml, postCleanMarkdown, tableToMarkdown, tabbedTextToMarkdown } from "../src/clean";
+import { buildMultipart, planDictationInsert } from "../src/dictate";
 import {
 	alignOf,
 	cleanCopyText,
@@ -86,7 +86,7 @@ import {
 	olTypeForDepth,
 	stripFrontmatter,
 	wrapWithMarkdown,
-} from "./format";
+} from "../src/format";
 
 let fails = 0;
 function ok(cond: unknown, name: string) {
@@ -294,7 +294,7 @@ ok(isTranscriptTurnAt(L("## Transcript\n**Alice [1:02:03]:** long meeting"), 1),
 ok(!isTranscriptTurnAt(TT, 99), "an out-of-range line is safe");
 
 // --- Word fake-list laundering ---
-import { convertWordLists } from "./clean";
+import { convertWordLists } from "../src/clean";
 const WP = (level: number, marker: string, text: string) =>
 	`<p class=MsoListParagraph style='mso-list:l0 level${level} lfo1'><!--[if !supportLists]--><span style='mso-list:Ignore'>${marker}<span>&nbsp;</span></span><!--[endif]-->${text}</p>`;
 eq(
@@ -420,7 +420,7 @@ eq(
 );
 
 // --- tabs parsing ---
-import { parseTabs } from "./blocks";
+import { parseTabs } from "../src/blocks";
 eq(
 	parseTabs("--- Tab 1\nhello\n--- Tab 2\nworld"),
 	[
@@ -433,7 +433,7 @@ eq(parseTabs("plain text only"), [{ title: "Tab 1", body: "plain text only" }], 
 eq(parseTabs("--- Only\n"), [{ title: "Only", body: "" }], "an empty pane survives");
 
 // --- columns parsing ---
-import { parseColumns } from "./blocks";
+import { parseColumns } from "../src/blocks";
 eq(
 	parseColumns("left stuff\n---\nright stuff"),
 	[
@@ -452,7 +452,7 @@ eq(
 );
 eq(parseColumns("only one"), [{ ratio: 1, body: "only one" }], "no markers means one column");
 
-import { columnsSnippet, serializeColumns } from "./blocks";
+import { columnsSnippet, serializeColumns } from "../src/blocks";
 eq(
 	serializeColumns([
 		{ ratio: 1, body: "A" },
@@ -476,7 +476,7 @@ eq(parseColumns(columnsSnippet("sidebar-left").replace(/```columns\n|\n```/g, ""
 ok(columnsSnippet("two").startsWith("```columns"), "the snippet is a fenced columns block");
 
 // --- callout emoji swap ---
-import { setCalloutEmoji } from "./blocks";
+import { setCalloutEmoji } from "../src/blocks";
 eq(setCalloutEmoji("> [!question] ❓ Remember", "💡"), "> [!question] 💡 Remember", "swaps the leading emoji");
 eq(setCalloutEmoji("> [!note] Plain title", "📝"), "> [!note] 📝 Plain title", "adds an emoji when there is none");
 eq(setCalloutEmoji("not a callout", "💡"), null, "non-callout lines are untouched");
@@ -542,7 +542,7 @@ eq(
 );
 
 // --- image embed editing ---
-import { editEmbed, embedInfo, removeEmbed } from "./embed";
+import { editEmbed, embedInfo, removeEmbed } from "../src/embed";
 eq(editEmbed("see ![[pic.png|300]] here", "pic.png", { width: 500 }), "see ![[pic.png|500]] here", "width swap keeps the rest");
 eq(editEmbed("![[pic.png|300]]", "pic.png", { width: null }), "![[pic.png]]", "width removal restores the bare embed");
 eq(editEmbed("![[pic.png|300]]", "pic.png", { alt: "sunset" }), "![[pic.png|sunset|300]]", "alt slides in before the size");

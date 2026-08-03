@@ -21,6 +21,10 @@ import {
 	Plugin,
 	PluginSettingTab,
 	Setting,
+	type ExtraButtonComponent,
+	type SettingDefinitionItem,
+	type SettingDefinitionPage,
+	type SettingDefinitionRender,
 	TFile,
 	TFolder,
 	WorkspaceLeaf,
@@ -7219,6 +7223,20 @@ class PlaceholderSweepModal extends Modal {
 	}
 }
 
+/** One row of the settings tab. `build` is handed a Setting whose name and
+ *  description are already set, so it only adds the controls. Rows are data
+ *  rather than drawing code so the two renderers cannot disagree about what
+ *  the tab holds. */
+type Row = { name: string; desc?: string; help?: string; aliases?: string[]; build?: (st: Setting) => void | (() => void) };
+
+/** A run of rows under one heading. A tab with more than one becomes a page
+ *  of headed groups on 1.13, and one section div each in the fallback. */
+type Group = { heading?: string; help?: string; rows: Row[] };
+
+/** One tab: a native settings page on Obsidian 1.13 and up, a tab button in
+ *  the fallback renderer for older builds. */
+type Page = { id: string; label: string; groups: Group[] };
+
 class PowerEditorSettingTab extends PluginSettingTab {
 	constructor(private plugin: PowerEditorPlugin) {
 		super(plugin.app, plugin);
@@ -7233,6 +7251,10 @@ class PowerEditorSettingTab extends PluginSettingTab {
 	private helpAnchor: HTMLElement | null = null;
 	private helpPinned = false;
 	private helpCleanup: (() => void) | null = null;
+	/** The button list redraws itself in place, so it keeps a handle on its own
+	 *  container and on the row a drag started from. */
+	private orderList: HTMLElement | null = null;
+	private dragFrom: number | null = null;
 
 	hide() {
 		this.closeHelp();
@@ -7282,24 +7304,155 @@ class PowerEditorSettingTab extends PluginSettingTab {
 		};
 	}
 
+	/** Redraw when the rows themselves change: an AI action added, the outline
+	 *  levels appearing. Obsidian 1.13 rebuilds the tab from
+	 *  getSettingDefinitions(); older builds have only the fallback renderer. */
+	private refresh() {
+		this.closeHelp(); // whatever the popover is anchored to is about to go
+		// update() arrived with the declarative API in 1.13 and minAppVersion is
+		// still 1.7.2, so it is reached through a cast rather than named outright:
+		// an older build has no definitions to rebuild from and redraws instead.
+		const tab = this as unknown as { update?: () => void };
+		if (tab.update) tab.update();
+		else this.renderFallback();
+	}
+
+	/** Hover shows the popover, a click pins it open so the one-line desc stays
+	 *  scannable. No aria-label on the icon, or Obsidian's native black tooltip
+	 *  doubles up with it. */
+	private wireHelp(ic: HTMLElement, text: string) {
+		ic.addEventListener("mouseenter", () => this.openHelp(ic, text, false));
+		ic.addEventListener("mouseleave", () => {
+			if (!this.helpPinned && this.helpAnchor === ic) this.closeHelp();
+		});
+		ic.addEventListener("click", (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			if (this.helpPinned && this.helpAnchor === ic) this.closeHelp();
+			else this.openHelp(ic, text, true);
+		});
+	}
+
+	/** The help icon that follows a setting's name. */
+	private addHelp(st: Setting, text: string) {
+		const ic = st.nameEl.createSpan({ cls: "ped-setting-help" });
+		setIcon(ic, "help-circle");
+		this.wireHelp(ic, text);
+	}
+
+	/** Obsidian 1.13 and up builds the tab from these and never calls display():
+	 *  one native page per tab, standing in for the tab bar the fallback draws
+	 *  for older builds. A tab holding more than one section becomes a page of
+	 *  headed groups, which is what the headings were doing by hand.
+	 *
+	 *  Every row renders itself rather than declaring a `control`. A declarative
+	 *  control writes through Obsidian's generic setControlValue, which would
+	 *  bypass persistSettings and overwrite whatever another device changed. */
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		const pages = this.buildPages();
+		const rowsOf = new Map(pages.map((p) => [p.label, p.groups.flatMap((g) => g.rows)] as const));
+		return [
+			{
+				name: "",
+				searchable: false, // it is a masthead, not a setting
+				render: (st) => {
+					st.settingEl.empty();
+					this.renderAbout(st.settingEl);
+				},
+			},
+			{
+				type: "group",
+				search: {
+					placeholder: "Search settings...",
+					// the entries here are whole tabs, so a tab stays up when anything
+					// inside it matches. Obsidian's own search box, top left, reaches
+					// the individual settings.
+					match: (def, query) => {
+						const q = query.trim().toLowerCase();
+						if (!q) return true;
+						const has = (v: string | undefined) => (v ?? "").toLowerCase().includes(q);
+						return (rowsOf.get(def.name) ?? []).some(
+							(r) => has(r.name) || has(r.desc) || (r.aliases ?? []).some(has)
+						);
+					},
+				},
+				items: pages.map(
+					(p): SettingDefinitionPage => ({
+						type: "page",
+						name: p.label,
+						// a lone unnamed section is the page itself, so it stays flat
+						items:
+							p.groups.length === 1 && !p.groups[0].heading
+								? p.groups[0].rows.map((r) => this.toDefinition(r, p.label))
+								: p.groups.map((g) => ({
+										type: "group" as const,
+										heading: g.heading,
+										// the section's own help note, on the header rather
+										// than on any one row beneath it
+										extraButtons: g.help
+											? [
+													(b: ExtraButtonComponent) => {
+														b.setIcon("help-circle");
+														this.wireHelp(b.extraSettingsEl, g.help ?? "");
+													},
+												]
+											: undefined,
+										items: g.rows.map((r) => this.toDefinition(r, p.label)),
+									})),
+					})
+				),
+			},
+		];
+	}
+
+	/** One row as a definition Obsidian can draw. The name and description are
+	 *  its to render and it rebuilds both on a redraw, so a row only hands back
+	 *  what it hung on the row element itself. */
+	private toDefinition(r: Row, page: string): SettingDefinitionRender {
+		return {
+			name: r.name,
+			desc: r.desc,
+			// searching the tab name still finds its rows, the way a heading match
+			// opened the whole section in the tab bar
+			aliases: [...(r.aliases ?? []), page],
+			render: (st) => {
+				const teardown = r.build?.(st);
+				if (r.help) this.addHelp(st, r.help);
+				return teardown;
+			},
+		};
+	}
+
+	/** What this plugin is and which build is running, above the section list.
+	 *  Read off the manifest so it cannot drift from the released version. */
+	private renderAbout(el: HTMLElement) {
+		el.addClass("ped-about");
+		const head = el.createDiv({ cls: "ped-about-head" });
+		head.createSpan({ cls: "ped-about-name", text: this.plugin.manifest.name });
+		head.createSpan({ cls: "ped-about-version", text: "v" + this.plugin.manifest.version });
+		el.createDiv({ cls: "ped-about-desc", text: this.plugin.manifest.description });
+	}
+
+	/** The pre-1.13 renderer: every section on one page, with a tab bar and a
+	 *  search box of our own because there was no declarative API to hand the
+	 *  work to. Obsidian 1.13 and up ignores this and renders the definitions
+	 *  above instead, so the two only ever differ in how they draw, never in
+	 *  what they draw. */
 	display() {
+		this.renderFallback();
+	}
+
+	private renderFallback() {
 		const root = this.containerEl;
 		root.empty();
 		this.closeHelp(); // a re-render orphans any popover anchored to the old DOM
-		// through persistSettings, never saveData: a whole-object write reverts
-		// whatever another device changed since this one loaded
-		const save = () => void this.plugin.persistSettings();
-		const s = this.plugin.settings;
 
-		const TABS: { id: string; label: string }[] = [
-			{ id: "toolbar", label: "Toolbar" },
-			{ id: "editing", label: "Editing" },
-			{ id: "lists", label: "Lists" },
-			{ id: "clipboard", label: "Clipboard" },
-			{ id: "todos", label: "To-dos" },
-			{ id: "ai", label: "AI & dictation" },
-		];
-		if (!TABS.some((t) => t.id === this.activeTab)) this.activeTab = TABS[0].id;
+		const pages = this.buildPages();
+		if (!pages.some((p) => p.id === this.activeTab)) this.activeTab = pages[0].id;
+
+		// the same masthead the declarative tab shows, minus the setting-item
+		// wrapper it gets there
+		this.renderAbout(root.createDiv({ cls: "ped-about-standalone" }));
 
 		const searchWrap = root.createDiv({ cls: "ped-settings-search" });
 		const searchInput = searchWrap.createEl("input", { cls: "ped-settings-search-input" });
@@ -7310,610 +7463,27 @@ class PowerEditorSettingTab extends PluginSettingTab {
 		const tabBar = root.createDiv({ cls: "ped-settings-tabs" });
 		const body = root.createDiv({ cls: "ped-settings-body" });
 
-		// a small help icon after the setting name holds the deeper "what does
-		// this actually do" note; hover shows it, a click pins it open. No
-		// aria-label on the icon, or Obsidian's native black tooltip doubles up.
-		const help = (st: Setting, text: string) => {
-			const ic = st.nameEl.createSpan({ cls: "ped-setting-help" });
-			setIcon(ic, "help-circle");
-			ic.addEventListener("mouseenter", () => this.openHelp(ic, text, false));
-			ic.addEventListener("mouseleave", () => {
-				if (!this.helpPinned && this.helpAnchor === ic) this.closeHelp();
-			});
-			ic.addEventListener("click", (e) => {
-				e.preventDefault();
-				e.stopPropagation();
-				if (this.helpPinned && this.helpAnchor === ic) this.closeHelp();
-				else this.openHelp(ic, text, true);
-			});
-		};
-
-		// each section is a div tagged with its tab; the settings that follow
-		// render into it because c points at the current section
-		let c: HTMLElement = body;
-		const section = (name: string, tab: string, helpText?: string) => {
-			c = body.createDiv({ cls: "ped-settings-section" });
-			c.dataset.tab = tab;
-			c.dataset.name = name.toLowerCase();
-			const h = new Setting(c).setName(name).setHeading();
-			if (helpText) help(h, helpText);
-		};
-
-		section("Toolbar", "toolbar");
-		new Setting(c)
-			.setName("Formatting toolbar")
-			.setDesc("A rich formatting toolbar at the top of every note in editing view.")
-			.addToggle((t) =>
-				t.setValue(s.showToolbar).onChange((v) => ((s.showToolbar = v), save(), this.plugin.rebuildToolbars()))
-			)
-			.then((st) => help(st, "The toolbar sits above the note in editing and Live Preview, and hides itself in Reading view. Pick which tools it shows on the Buttons list below."));
-		new Setting(c)
-			.setName("Show on phones and tablets")
-			.setDesc("Obsidian mobile has its own toolbar, so this is off by default.")
-			.addToggle((t) =>
-				t.setValue(s.showOnMobile).onChange((v) => ((s.showOnMobile = v), save(), this.plugin.rebuildToolbars()))
-			)
-			.then((st) => help(st, "Leave this off to keep Obsidian's built-in mobile toolbar. Turn it on when you want the full formatting row on a tablet with room to spare."));
-		new Setting(c)
-			.setName("Quick-capture mobile toolbar")
-			.setDesc(
-				"Replace the commands on Obsidian's above-keyboard mobile toolbar with a note-taking set: photo, dictate, to-do, bullet and numbered lists, indents, bold, and hide keyboard. Turning this off restores your previous arrangement."
-			)
-			.addToggle((t) =>
-				t.setValue(s.onenoteMobileToolbar).onChange((v) => {
-					s.onenoteMobileToolbar = v;
-					save();
-					this.plugin.applyMobileToolbar();
-				})
-			)
-			.then((st) => help(st, "This changes the row just above the phone keyboard, not the main toolbar. Your original arrangement is saved and comes straight back when you turn this off."));
-
-		section(
-			"Buttons",
-			"toolbar",
-			"Which buttons appear on the toolbar, and in what order. A hidden button still works from the command palette and the slash menu."
-		);
-		const hidden = new Set(s.hiddenButtons);
-		const labelOf = new Map(BUTTON_IDS);
-		const arrangeRow = new Setting(c);
-		const orderList = c.createDiv({ cls: "ped-order-list" });
-		// The rows redraw themselves rather than the whole settings tab: moving a
-		// button is a rapid, repeated action and re-rendering the tab would throw
-		// you back to the top of the page on every click.
-		let dragFrom: number | null = null;
-		const drawOrder = () => {
-			orderList.empty();
-			const order = this.plugin.orderedButtonIds();
-			const move = (i: number, delta: number) => {
-				const j = i + delta;
-				if (j < 0 || j >= order.length) return;
-				[order[i], order[j]] = [order[j], order[i]];
-				s.buttonOrder = order;
-				save();
-				this.plugin.rebuildToolbars();
-				drawOrder();
-			};
-			order.forEach((id, i) => {
-				const row = new Setting(orderList);
-				if (id === "|") {
-					row.setName("Divider").setDesc("A vertical rule between groups.");
-					row.nameEl.addClass("ped-order-divider");
-				} else {
-					row.setName(labelOf.get(id) ?? id);
+		// one section div per group, tagged with its tab so the tab bar and the
+		// search box below can show and hide whole sections at a time
+		for (const p of pages) {
+			for (const g of p.groups) {
+				const sec = body.createDiv({ cls: "ped-settings-section" });
+				sec.dataset.tab = p.id;
+				sec.dataset.name = (g.heading ?? p.label).toLowerCase();
+				const h = new Setting(sec).setName(g.heading ?? p.label).setHeading();
+				if (g.help) this.addHelp(h, g.help);
+				// name and description first, then the row's own content: the same
+				// order Obsidian applies a definition in, so a row that appends to
+				// either element lands in the same place under both renderers
+				for (const r of g.rows) {
+					const st = new Setting(sec).setName(r.name);
+					if (r.desc) st.setDesc(r.desc);
+					if (r.aliases?.length) st.settingEl.dataset.pedAlias = r.aliases.join(" ").toLowerCase();
+					r.build?.(st);
+					if (r.help) this.addHelp(st, r.help);
 				}
-
-				// Drag to reorder. The grip is the only handle, so a drag can
-				// never start from the toggle you were reaching for, and the row
-				// itself carries the drop target.
-				const el = row.settingEl;
-				el.addClass("ped-order-row");
-				const grip = createDiv({ cls: "ped-order-grip", attr: { "aria-label": "Drag to reorder", draggable: "true" } });
-				setIcon(grip, "grip-vertical");
-				el.prepend(grip);
-
-				// Keyboard parity, since a drag handle is unreachable without a
-				// mouse: focus the grip and use the arrow keys.
-				grip.tabIndex = 0;
-				grip.addEventListener("keydown", (e) => {
-					if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
-					e.preventDefault();
-					move(i, e.key === "ArrowUp" ? -1 : 1);
-				});
-
-				grip.addEventListener("dragstart", (ev) => {
-					dragFrom = i;
-					el.addClass("is-dragging");
-					ev.dataTransfer?.setData("text/plain", String(i));
-					if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "move";
-					// drag the whole row, not the little grip glyph
-					ev.dataTransfer?.setDragImage(el, 12, el.offsetHeight / 2);
-				});
-				grip.addEventListener("dragend", () => {
-					dragFrom = null;
-					orderList.findAll(".ped-order-row").forEach((r) => {
-						r.removeClass("is-dragging");
-						r.removeClass("drop-above");
-						r.removeClass("drop-below");
-					});
-				});
-
-				el.addEventListener("dragover", (ev) => {
-					if (dragFrom === null) return;
-					ev.preventDefault();
-					if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
-					const r = el.getBoundingClientRect();
-					const below = ev.clientY > r.top + r.height / 2;
-					el.toggleClass("drop-above", !below);
-					el.toggleClass("drop-below", below);
-				});
-				el.addEventListener("dragleave", () => {
-					el.removeClass("drop-above");
-					el.removeClass("drop-below");
-				});
-				el.addEventListener("drop", (ev) => {
-					ev.preventDefault();
-					if (dragFrom === null) return;
-					const r = el.getBoundingClientRect();
-					const below = ev.clientY > r.top + r.height / 2;
-					const next = moveItem(order, dragFrom, below ? i + 1 : i);
-					dragFrom = null;
-					s.buttonOrder = next;
-					save();
-					this.plugin.rebuildToolbars();
-					drawOrder();
-				});
-
-				if (id === "|") {
-					row.addExtraButton((b) =>
-						b
-							.setIcon("trash-2")
-							.setTooltip("Remove this divider")
-							.onClick(() => {
-								const next = order.slice();
-								next.splice(i, 1);
-								s.buttonOrder = next;
-								save();
-								this.plugin.rebuildToolbars();
-								drawOrder();
-							})
-					);
-					return;
-				}
-				row.addToggle((t) =>
-					t.setValue(!hidden.has(id)).onChange((v) => {
-						if (v) hidden.delete(id);
-						else hidden.add(id);
-						s.hiddenButtons = [...hidden];
-						save();
-						this.plugin.rebuildToolbars();
-					})
-				);
-			});
-		};
-		arrangeRow
-			.setName("Arrange")
-			.setDesc("Drag a button by its grip to reorder it (or focus a grip and use the arrow keys). Add a divider, or go back to the original layout.")
-			.addButton((b) =>
-				b
-					.setButtonText("Add divider")
-					.setTooltip("Adds a divider at the end; move it where you want it")
-					.onClick(() => {
-						s.buttonOrder = [...this.plugin.orderedButtonIds(), "|"];
-						save();
-						this.plugin.rebuildToolbars();
-						drawOrder();
-					})
-			)
-			.addButton((b) =>
-				b.setButtonText("Reset order").onClick(() => {
-					s.buttonOrder = [];
-					save();
-					this.plugin.rebuildToolbars();
-					drawOrder();
-				})
-			);
-		drawOrder();
-
-		section("Editing", "editing");
-		new Setting(c)
-			.setName("Selection bubble")
-			.setDesc("A compact formatting bubble appears right at your selection (the fastest way to format).")
-			.addToggle((t) => t.setValue(s.showBubble).onChange((v) => ((s.showBubble = v), save())))
-			.then((st) => help(st, "Select text and a small toolbar floats next to it, so you do not have to reach for the top bar. It follows the selection and vanishes when you click away."));
-		new Setting(c)
-			.setName("Block drag handles")
-			.setDesc("Hover a block for a grip: drag it to move the block, click it for the block menu (turn into, duplicate, copy link, delete…).")
-			.addToggle((t) => t.setValue(s.blockHandles).onChange((v) => ((s.blockHandles = v), save())))
-			.then((st) => help(st, "The grip shows in the left margin when you hover a paragraph, list, table, or embed. Drag it to reorder, or click it for turn-into, duplicate, copy link, and delete."));
-		new Setting(c)
-			.setName("Headings move their section")
-			.setDesc("Dragging a heading takes everything beneath it (until the next heading of the same level). Turn off to move heading lines alone.")
-			.addToggle((t) => t.setValue(s.headingSections).onChange((v) => ((s.headingSections = v), save())))
-			.then((st) => help(st, "On, a heading's grip carries its whole section as one block. Off, it moves just the heading line and leaves the body where it is."));
-		new Setting(c)
-			.setName("Hide formatting characters (WYSIWYG)")
-			.setDesc("Live Preview normally reveals ** and == while the cursor is inside formatted text. This keeps them hidden for a clean look; the markers still exist in the file, you just never see them.")
-			.addToggle((t) =>
-				t.setValue(s.wysiwygMarks).onChange((v) => {
-					s.wysiwygMarks = v;
-					save();
-					this.plugin.applyWysiwyg();
-				})
-			)
-			.then((st) => help(st, "Keeps markers like ** and == out of sight even while you edit that line, so text always looks finished. The markers stay in the file, so the Markdown never changes. This is also what renders bold and italics inside a highlight."));
-		new Setting(c)
-			.setName("Live checkboxes while editing")
-			.setDesc("Keep a task's checkbox rendered on the line you are editing, instead of showing the raw '- [ ]' the way Live Preview does.")
-			.addToggle((t) =>
-				t.setValue(s.liveCheckboxes).onChange((v) => {
-					s.liveCheckboxes = v;
-					save();
-					this.plugin.refreshEditors();
-				})
-			)
-			.then((st) => help(st, "Most noticeable when a note opens with a task on its first line and the cursor lands there: without this you see '- [ ]', with it you see a checkbox like every other line. Off the active line nothing changes, so there is never a doubled box."));
-		new Setting(c)
-			.setName("Rich text on copy")
-			.setDesc("Ctrl+C also puts formatted text on the clipboard, so a paste into email keeps its headings, bold, links, and lettered sub-lists.")
-			.addToggle((t) =>
-				t.setValue(s.richCopy).onChange((v) => {
-					s.richCopy = v;
-					save();
-				})
-			)
-			.then((st) =>
-				help(
-					st,
-					"Plain Markdown goes on the clipboard as well, so pasting into an editor or a terminal is unchanged. Pasting back into Obsidian gives you the Markdown you copied, not a reading of the HTML, because the copy carries its own source inside it. Turn this off if you want Obsidian's own plain copy back."
-				)
-			);
-		new Setting(c)
-			.setName("Indent guides on lists")
-			.setDesc("The vertical rule Obsidian draws down each indent level.")
-			.addDropdown((d) =>
-				d
-					.addOption("all", "Show on every list")
-					.addOption("no-ordered", "Hide on numbered lists")
-					.addOption("none", "Hide on every list")
-					.setValue(s.indentGuides)
-					.onChange((v) => {
-						s.indentGuides = v as PowerEditorSettings["indentGuides"];
-						save();
-						this.plugin.applyListGuides();
-					})
-			)
-			.then((st) =>
-				help(
-					st,
-					"A numbered list already says how deep an item sits twice over - the numbering itself, and the a, b, c under it - so a third cue reads as a line ruled through your text. A bulleted list has nothing else saying it, which is why hiding those is a separate choice rather than the default. Both views, and Obsidian's own setting still governs whether guides exist at all."
-				)
-			);
-		new Setting(c)
-			.setName("Line spacing")
-			.setDesc("How much your pages breathe (applies to editing and reading views).")
-			.addDropdown((d) =>
-				d
-					.addOption("compact", "Compact")
-					.addOption("normal", "Normal")
-					.addOption("relaxed", "Relaxed")
-					.setValue(s.lineSpacing)
-					.onChange((v) => {
-						s.lineSpacing = v as PowerEditorSettings["lineSpacing"];
-						save();
-						this.plugin.applySpacing();
-					})
-			)
-			.then((st) => help(st, "Sets the gap between lines everywhere you read and write. Compact fits more on screen; Relaxed is gentler for long reading."));
-		const GAPS = [
-			["off", "Off (Obsidian default)"],
-			["18", "Roomy (18px)"],
-			["12", "Half (12px)"],
-			["8", "Tight (8px)"],
-			["4", "Very tight (4px)"],
-			["0", "None (0px)"],
-		];
-		// Headings and tables get the same control twice, so it is built once.
-		const gapSetting = (name: string, desc: string, key: "headingGap" | "tableGap", hint: string) =>
-			new Setting(c)
-				.setName(name)
-				.setDesc(desc)
-				.addDropdown((d) => {
-					for (const [v, label] of GAPS) d.addOption(v, label);
-					// a value typed into the box beside it is not one of the
-					// presets; show it rather than snapping to something wrong
-					if (!GAPS.some(([v]) => v === s[key])) d.addOption(s[key], `Custom (${s[key]}px)`);
-					d.setValue(s[key]).onChange((v) => {
-						s[key] = v;
-						save();
-						this.plugin.applyBlockGap();
-						this.display();
-					});
-				})
-				.addText((t) =>
-					t
-						.setPlaceholder("px")
-						.setValue(s[key] === "off" ? "" : s[key])
-						.onChange((v) => {
-							const n = Number(v.trim());
-							if (v.trim() === "" || !Number.isFinite(n) || n < 0 || n > 60) return;
-							s[key] = String(n);
-							save();
-							this.plugin.applyBlockGap();
-						})
-				)
-				.then((st) => help(st, hint));
-
-		gapSetting(
-			"Space under headings",
-			"Markdown puts a blank line under a heading, and in editing view that line takes a full line's height. This shrinks it so a heading sits closer to what it introduces.",
-			"headingGap",
-			"A normal line is about 24px, so Half is half. Type your own number in the box for anything in between (0 to 60). None removes the gap entirely, the blank line stays in the file, so the Markdown is unchanged, it just stops taking up room. Editing view only; the cursor looks short while it sits on that line and returns to normal as soon as you type."
-		);
-		gapSetting(
-			"Space around tables",
-			"A table has a blank line on both sides and Markdown needs both, delete one and the table stops being a table. This shrinks them, and trims the table's own bottom padding to match.",
-			"tableGap",
-			"Set independently of headings, because a table usually wants a little more room than a paragraph does. Where a table follows a heading directly, the heading setting wins, so a heading sits the same distance from whatever comes next. The table's bottom padding never goes below 6px, so the row drag handles keep their room."
-		);
-
-		new Setting(c)
-			.setName("Show when the note was last edited")
-			.setDesc("A quiet line under the note's title: “Edited 3 minutes ago”. Click it to swap between the relative time and the exact date.")
-			.addDropdown((d) =>
-				d
-					.addOption("labeled", "Yes, with the word Edited")
-					.addOption("bare", "Yes, just the time")
-					.addOption("off", "Off")
-					.setValue(s.showEdited)
-					.onChange((v) => {
-						s.showEdited = v as PowerEditorSettings["showEdited"];
-						save();
-						this.plugin.updatePageChrome();
-					})
-			)
-			.then((st) =>
-				help(
-					st,
-					"Reads the file's own modified time, so it is right without you maintaining anything. If a note has an `updated:` (or `modified:`) property in its frontmatter, that wins instead, useful in a synced vault, where the sync client can rewrite the file's modified time when a note arrives from another device and make it look freshly edited."
-				)
-			);
-		new Setting(c)
-			.setName("Where to show it")
-			.setDesc("Under the note's title, at the very end of the note, or in both places.")
-			.addDropdown((d) =>
-				d
-					.addOption("title", "Under the title")
-					.addOption("rule", "Under the title, with a line above it")
-					.addOption("bottom", "At the end of the note")
-					.addOption("both", "Both")
-					.setValue(s.editedPosition)
-					.onChange((v) => {
-						s.editedPosition = v as PowerEditorSettings["editedPosition"];
-						save();
-						this.plugin.updatePageChrome();
-					})
-			)
-			.then((st) =>
-				help(
-					st,
-					"Under the title is the Notion habit: you see it as you arrive. The line variant is the same spot pulled tight against the title with a hairline drawn between them, so the title and the date read as one page header instead of as two stray lines above your first paragraph. At the end is closer to 1Password, where the detail sits out of the way until you go looking. Both is fine on long notes, where the title has scrolled away by the time you wonder."
-				)
-			);
-		new Setting(c)
-			.setName("Time format")
-			.setDesc("How the time itself reads.")
-			.addDropdown((d) =>
-				d
-					.addOption("relative", "Relative (3 minutes ago)")
-					.addOption("exact", "Exact date and time")
-					.addOption("both", "Relative, then the exact date")
-					.setValue(s.editedFormat)
-					.onChange((v) => {
-						s.editedFormat = v as PowerEditorSettings["editedFormat"];
-						save();
-						this.plugin.updatePageChrome();
-					})
-			)
-			.then((st) => help(st, "Relative answers 'is this stale?' at a glance; exact answers 'which version is this?'. Whichever you pick, clicking the stamp shows both for that note until you click it again, and hovering always shows the exact time."));
-
-		new Setting(c)
-			.setName("Code block theme")
-			.setDesc("The syntax palette for fenced code. The dark ones are the editor themes Claude and ChatGPT render code in.")
-			.addDropdown((d) =>
-				d
-					.addOption("vivid", "Vivid Light")
-					.addOption("one-dark", "One Dark")
-					.addOption("dracula", "Dracula")
-					.addOption("monokai", "Monokai")
-					.addOption("github-dark", "GitHub Dark")
-					.addOption("default", "Follow my Obsidian theme")
-					.setValue(s.codeTheme)
-					.onChange((v) => {
-						s.codeTheme = v as PowerEditorSettings["codeTheme"];
-						save();
-						this.plugin.applyCodeTheme();
-					})
-			)
-			.then((st) =>
-				help(
-					st,
-					"A dark code block inside a light note is what Claude, ChatGPT, and most documentation sites do, because saturated syntax colors need a dark surface to sit on. Vivid Light keeps the light background with stronger colors than Obsidian's own. Whichever you pick, code only takes color when the fence names a language, use the language button on the block to set or change it."
-				)
-			);
-		new Setting(c)
-			.setName("Line numbers in code blocks")
-			.setDesc("A numbered gutter down the left of every fenced block.")
-			.addToggle((t) =>
-				t.setValue(s.codeLineNumbers).onChange((v) => {
-					s.codeLineNumbers = v;
-					save();
-					this.plugin.applyCodeTheme();
-				})
-			)
-			.then((st) => help(st, "Numbers count from 1 within each block, not from the note's line count, so they match what you would see if the file were open in an editor. They are drawn, not written into the note, so copying the block copies the code alone."));
-
-		section("Numbered list outline", "lists");
-		new Setting(c)
-			.setName("Multilevel numbering (outline style)")
-			.setDesc("Style nested numbered lists by level (1, 2, 3 then a, b, c then i, ii, iii) instead of restarting at 1 everywhere. Applies in editing and reading views; the raw number shows while your cursor is on the line.")
-			.addToggle((t) =>
-				t.setValue(s.numberedOutline).onChange((v) => {
-					s.numberedOutline = v;
-					save();
-					this.plugin.applyOutlineCss();
-					this.plugin.refreshEditors();
-					this.display();
-				})
-			)
-			.then((st) => help(st, "Nested numbered lists cascade through the styles you set per level instead of every level starting at 1. Choose each level below. The plain number reappears while your cursor is on that line so renumbering stays normal."));
-		if (s.numberedOutline) {
-			const ordinal = (n: number) => ["1st", "2nd", "3rd", "4th", "5th", "6th"][n] ?? `${n + 1}th`;
-			for (let level = 0; level < s.outlineStyles.length; level++) {
-				new Setting(c)
-					.setName(`${ordinal(level)} level`)
-					.addDropdown((d) => {
-						for (const [value, label] of OUTLINE_CHOICES) d.addOption(value, label);
-						d.setValue(s.outlineStyles[level]).onChange((v) => {
-							s.outlineStyles[level] = v;
-							save();
-							this.plugin.applyOutlineCss();
-							this.plugin.refreshEditors();
-						});
-					});
 			}
 		}
-
-		section("Clipboard", "clipboard");
-		new Setting(c)
-			.setName("Clean pasted HTML")
-			.setDesc("Pasting from Word, Outlook, a web page, or an AI chat converts to clean Markdown automatically, tables included. The 'Paste as clean Markdown' command does it on demand.")
-			.addToggle((t) => t.setValue(s.cleanPaste).onChange((v) => ((s.cleanPaste = v), save())))
-			.then((st) => help(st, "Strips the hidden styling that Word, Outlook, and web pages carry and turns it into plain Markdown. Tables keep their rows and columns, so a comparison copied out of ChatGPT, Claude, or Grok lands as a real table instead of one run-on paragraph. When this is off, the 'Paste as clean Markdown' command still does it on request."));
-		new Setting(c)
-			.setName("Clean copied text")
-			.setDesc(
-				"Highlighted or colored text stores HTML in the note. Clean removes those tags when you copy, so other apps get readable text and keep bold and italics. Plain text also drops the Markdown so nothing but the words is left. Off leaves copying to Obsidian."
-			)
-			.addDropdown((d) =>
-				d
-					.addOption("clean", "Clean (remove highlight and color tags)")
-					.addOption("plain", "Plain text (remove all formatting)")
-					.addOption("off", "Off (Obsidian default)")
-					.setValue(s.copyMode)
-					.onChange((v) => {
-						s.copyMode = v as PowerEditorSettings["copyMode"];
-						save();
-					})
-			)
-			.then((st) => help(st, "Pick Plain text if you want pasted words with no ** or highlight tags at all. Clean keeps bold and italics but removes the color HTML. This only affects copying from editing view; Reading view already copies plain text."));
-
-		section("To-dos", "todos");
-		new Setting(c)
-			.setName("Completing a to-do stamps the date")
-			.setDesc(
-				"Checking a box appends a ✅ done date so dashboards can show when things got finished. Recurring items (🔁) always create their next occurrence either way. Query them anywhere with a 'todo' code block."
-			)
-			.addToggle((t) => t.setValue(s.stampDoneDates).onChange((v) => ((s.stampDoneDates = v), save())))
-			.then((st) => help(st, "The stamped date is what the 'todo' dashboards use to show what got done and when. Recurring items still spawn their next date whether this is on or off."));
-		new Setting(c)
-			.setName("Quick capture inbox")
-			.setDesc("Where 'To-do: quick capture' appends new items. The note is created if it doesn't exist.")
-			.addText((t) => t.setPlaceholder("Inbox.md").setValue(s.inboxNote).onChange((v) => ((s.inboxNote = v), save())))
-			.then((st) => help(st, "Give a path like Inbox.md or Tasks/Inbox.md. The note and any missing folders are created the first time you capture into it."));
-		new Setting(c)
-			.setName("To-do reminders")
-			.setDesc("A due-today digest when Obsidian opens, and a notice the minute any '⏰ HH:MM' to-do comes due while the app is running.")
-			.addToggle((t) => t.setValue(s.todoReminders).onChange((v) => ((s.todoReminders = v), save())))
-			.then((st) => help(st, "Add a time to any item with the ⏰ emoji, like ⏰ 14:30, and a notice pops when it comes due while Obsidian is open. Phone push notifications are not possible from a plugin."));
-
-		section("AI edits", "ai");
-		new Setting(c)
-			.setName("Anthropic API key")
-			.setDesc("Powers the bubble's AI actions (improve, fix grammar, shorten, summarize). Leave empty to reuse Power Assistant's key automatically.")
-			.addText((t) => {
-				t.inputEl.type = "password";
-				t.setValue(s.anthropicKey).onChange((v) => ((s.anthropicKey = v.trim()), save()));
-			})
-			.then((st) => help(st, "Used only by the AI actions on the bubble and menu. It lives in this vault's settings and never appears in a note. Leave it blank and the plugin borrows Power Assistant's key when that plugin is installed."));
-		new Setting(c)
-			.setName("Model")
-			.addText((t) => t.setValue(s.aiModel).onChange((v) => ((s.aiModel = v.trim() || "claude-haiku-4-5"), save())))
-			.then((st) => help(st, "The Claude model the AI actions call. Haiku is fast and inexpensive for quick edits; a larger model gives stronger rewrites. Clear the box to restore the default."));
-		new Setting(c)
-			.setName("Custom AI actions")
-			.setDesc('Your own one-click instructions on the AI menu, e.g. "Rewrite as a customer-friendly email".')
-			.addButton((b) =>
-				b.setButtonText("Add action").onClick(() => {
-					s.aiActions.push({ name: "", prompt: "" });
-					save();
-					this.display();
-				})
-			)
-			.then((st) => help(st, "Each action is a label plus an instruction. The label shows on the AI menu; the instruction is applied to whatever text you have selected. Handy for repeated jobs like turning notes into a status update."));
-		s.aiActions.forEach((a, idx) => {
-			const row = new Setting(c);
-			row.settingEl.addClass("ped-aiaction-row");
-			row.addText((t) => t.setPlaceholder("Menu label").setValue(a.name).onChange((v) => ((a.name = v), save())));
-			row.addTextArea((t) =>
-				t.setPlaceholder("Instruction, e.g. Rewrite this as a friendly status update.").setValue(a.prompt).onChange((v) => ((a.prompt = v), save()))
-			);
-			row.addExtraButton((b) =>
-				b.setIcon("trash-2").setTooltip("Remove").onClick(() => {
-					s.aiActions.splice(idx, 1);
-					save();
-					this.display();
-				})
-			);
-		});
-
-		section("Dictation", "ai");
-		new Setting(c)
-			.setName("Transcription endpoint")
-			.setDesc("Any OpenAI-compatible base URL, for example Groq. Leave empty to reuse Power Assistant's transcription automatically.")
-			.addText((t) =>
-				t
-					.setPlaceholder("https://api.groq.com/openai/v1")
-					.setValue(s.transcriptionEndpoint)
-					.onChange((v) => ((s.transcriptionEndpoint = v.trim()), save()))
-			)
-			.then((st) =>
-				help(
-					st,
-					"Where the recorded audio is sent to become text; only the /audio/transcriptions path under it is used. Leave it blank and dictation borrows Power Assistant's endpoint and key when that plugin is installed, so a vault running both needs no second setup. Point it at a server on your own machine to keep the audio local, in which case no key is needed."
-				)
-			);
-		new Setting(c)
-			.setName("Transcription API key")
-			.setDesc("The key for the endpoint above. Empty is fine for a server on your own machine, or to fall back to Power Assistant's.")
-			.addText((t) => {
-				t.inputEl.type = "password";
-				t.setPlaceholder("Leave empty to use Power Assistant's").setValue(s.transcriptionKey).onChange((v) => ((s.transcriptionKey = v.trim()), save()));
-			})
-			.then((st) =>
-				help(
-					st,
-					"The bearer token for the endpoint above. It is stored in this vault's settings and sent only to that endpoint. A transcription server running on your own machine usually needs no key at all."
-				)
-			);
-		new Setting(c)
-			.setName("Transcription model")
-			.addText((t) => t.setPlaceholder("whisper-large-v3").setValue(s.transcriptionModel).onChange((v) => ((s.transcriptionModel = v.trim()), save())))
-			.then((st) => help(st, "The model name the endpoint expects, for example whisper-large-v3 on Groq. Leave it empty to use whisper-large-v3."));
-		new Setting(c)
-			.setName("After transcribing")
-			.setDesc("Raw inserts exactly what you said. Tidy removes filler and fixes punctuation; Bullets turns it into a list (both use the AI key). Right-click the mic to switch on the fly.")
-			.addDropdown((d) =>
-				d
-					.addOption("raw", "Insert the raw transcript")
-					.addOption("tidy", "Tidy into clean prose")
-					.addOption("bullets", "Turn into bullet points")
-					.setValue(s.dictationMode)
-					.onChange((v) => {
-						s.dictationMode = v as PowerEditorSettings["dictationMode"];
-						save();
-					})
-			)
-			.then((st) => help(st, "Tidy and Bullets send the transcript through the AI key, so they need a key set above. Raw needs no key. Right-click the microphone button to switch mode without opening settings."));
 
 		// search filters across every tab; picking a tab shows just its sections
 		const setVisible = (el: HTMLElement, v: boolean) => (el.style.display = v ? "" : "none");
@@ -7933,7 +7503,7 @@ class PowerEditorSettingTab extends PluginSettingTab {
 				for (const it of items) {
 					const name = it.querySelector(".setting-item-name")?.textContent?.toLowerCase() ?? "";
 					const desc = it.querySelector(".setting-item-description")?.textContent?.toLowerCase() ?? "";
-					const hit = nameHit || name.includes(q) || desc.includes(q);
+					const hit = nameHit || name.includes(q) || desc.includes(q) || (it.dataset.pedAlias ?? "").includes(q);
 					setVisible(it, hit);
 					if (hit) anyHit = true;
 				}
@@ -7941,12 +7511,12 @@ class PowerEditorSettingTab extends PluginSettingTab {
 			}
 		};
 
-		for (const t of TABS) {
-			const btn = tabBar.createEl("button", { text: t.label, cls: "ped-settings-tab" });
-			btn.toggleClass("is-active", t.id === this.activeTab);
+		for (const p of pages) {
+			const btn = tabBar.createEl("button", { text: p.label, cls: "ped-settings-tab" });
+			btn.toggleClass("is-active", p.id === this.activeTab);
 			btn.onclick = () => {
-				if (this.activeTab === t.id) return;
-				this.activeTab = t.id;
+				if (this.activeTab === p.id) return;
+				this.activeTab = p.id;
 				for (const other of Array.from(tabBar.children) as HTMLElement[]) other.toggleClass("is-active", other === btn);
 				applyView();
 			};
@@ -7958,5 +7528,713 @@ class PowerEditorSettingTab extends PluginSettingTab {
 		});
 
 		applyView();
+	}
+
+	/** Every row of the settings tab, in order, as plain data: the one source
+	 *  both renderers draw from, so they cannot drift apart. Built fresh on each
+	 *  render because some sections depend on current settings. */
+	private buildPages(): Page[] {
+		// through persistSettings, never saveData: a whole-object write reverts
+		// whatever another device changed since this one loaded
+		const save = () => void this.plugin.persistSettings();
+		const s = this.plugin.settings;
+
+		const toolbar: Row[] = [
+			{
+				name: "Formatting toolbar",
+				desc: "A rich formatting toolbar at the top of every note in editing view.",
+				help: "The toolbar sits above the note in editing and Live Preview, and hides itself in Reading view. Pick which tools it shows on the Buttons list below.",
+				build: (st) => {
+					st.addToggle((t) =>
+						t.setValue(s.showToolbar).onChange((v) => ((s.showToolbar = v), save(), this.plugin.rebuildToolbars()))
+					);
+				},
+			},
+			{
+				name: "Show on phones and tablets",
+				desc: "Obsidian mobile has its own toolbar, so this is off by default.",
+				help: "Leave this off to keep Obsidian's built-in mobile toolbar. Turn it on when you want the full formatting row on a tablet with room to spare.",
+				build: (st) => {
+					st.addToggle((t) =>
+						t.setValue(s.showOnMobile).onChange((v) => ((s.showOnMobile = v), save(), this.plugin.rebuildToolbars()))
+					);
+				},
+			},
+			{
+				name: "Quick-capture mobile toolbar",
+				desc: "Replace the commands on Obsidian's above-keyboard mobile toolbar with a note-taking set: photo, dictate, to-do, bullet and numbered lists, indents, bold, and hide keyboard. Turning this off restores your previous arrangement.",
+				help: "This changes the row just above the phone keyboard, not the main toolbar. Your original arrangement is saved and comes straight back when you turn this off.",
+				build: (st) => {
+					st.addToggle((t) =>
+						t.setValue(s.onenoteMobileToolbar).onChange((v) => {
+							s.onenoteMobileToolbar = v;
+							save();
+							this.plugin.applyMobileToolbar();
+						})
+					);
+				},
+			},
+		];
+
+		const buttons: Row[] = [
+			{
+				name: "Arrange",
+				desc: "Drag a button by its grip to reorder it (or focus a grip and use the arrow keys). Add a divider, or go back to the original layout.",
+				build: (st) => {
+					st.addButton((b) =>
+						b
+							.setButtonText("Add divider")
+							.setTooltip("Adds a divider at the end; move it where you want it")
+							.onClick(() => {
+								s.buttonOrder = [...this.plugin.orderedButtonIds(), "|"];
+								save();
+								this.plugin.rebuildToolbars();
+								this.redrawButtonOrder();
+							})
+					);
+					st.addButton((b) =>
+						b.setButtonText("Reset order").onClick(() => {
+							s.buttonOrder = [];
+							save();
+							this.plugin.rebuildToolbars();
+							this.redrawButtonOrder();
+						})
+					);
+				},
+			},
+			{
+				// The list owns a container of its own rather than being one row per
+				// button, because moving a button is a rapid, repeated action: the
+				// rows redraw themselves without redrawing the tab, which would throw
+				// you back to the top of the page on every click.
+				name: "",
+				aliases: ["buttons", "order", "divider", "arrange"],
+				build: (st) => {
+					st.settingEl.empty();
+					st.settingEl.addClass("ped-order-host");
+					this.orderList = st.settingEl.createDiv({ cls: "ped-order-list" });
+					this.redrawButtonOrder();
+					return () => {
+						this.orderList = null;
+					};
+				},
+			},
+		];
+
+		const editing: Row[] = [
+			{
+				name: "Selection bubble",
+				desc: "A compact formatting bubble appears right at your selection (the fastest way to format).",
+				help: "Select text and a small toolbar floats next to it, so you do not have to reach for the top bar. It follows the selection and vanishes when you click away.",
+				build: (st) => {
+					st.addToggle((t) => t.setValue(s.showBubble).onChange((v) => ((s.showBubble = v), save())));
+				},
+			},
+			{
+				name: "Block drag handles",
+				desc: "Hover a block for a grip: drag it to move the block, click it for the block menu (turn into, duplicate, copy link, delete…).",
+				help: "The grip shows in the left margin when you hover a paragraph, list, table, or embed. Drag it to reorder, or click it for turn-into, duplicate, copy link, and delete.",
+				build: (st) => {
+					st.addToggle((t) => t.setValue(s.blockHandles).onChange((v) => ((s.blockHandles = v), save())));
+				},
+			},
+			{
+				name: "Headings move their section",
+				desc: "Dragging a heading takes everything beneath it (until the next heading of the same level). Turn off to move heading lines alone.",
+				help: "On, a heading's grip carries its whole section as one block. Off, it moves just the heading line and leaves the body where it is.",
+				build: (st) => {
+					st.addToggle((t) => t.setValue(s.headingSections).onChange((v) => ((s.headingSections = v), save())));
+				},
+			},
+			{
+				name: "Hide formatting characters (WYSIWYG)",
+				desc: "Live Preview normally reveals ** and == while the cursor is inside formatted text. This keeps them hidden for a clean look; the markers still exist in the file, you just never see them.",
+				help: "Keeps markers like ** and == out of sight even while you edit that line, so text always looks finished. The markers stay in the file, so the Markdown never changes. This is also what renders bold and italics inside a highlight.",
+				build: (st) => {
+					st.addToggle((t) =>
+						t.setValue(s.wysiwygMarks).onChange((v) => {
+							s.wysiwygMarks = v;
+							save();
+							this.plugin.applyWysiwyg();
+						})
+					);
+				},
+			},
+			{
+				name: "Live checkboxes while editing",
+				desc: "Keep a task's checkbox rendered on the line you are editing, instead of showing the raw '- [ ]' the way Live Preview does.",
+				help: "Most noticeable when a note opens with a task on its first line and the cursor lands there: without this you see '- [ ]', with it you see a checkbox like every other line. Off the active line nothing changes, so there is never a doubled box.",
+				build: (st) => {
+					st.addToggle((t) =>
+						t.setValue(s.liveCheckboxes).onChange((v) => {
+							s.liveCheckboxes = v;
+							save();
+							this.plugin.refreshEditors();
+						})
+					);
+				},
+			},
+			{
+				name: "Rich text on copy",
+				desc: "Ctrl+C also puts formatted text on the clipboard, so a paste into email keeps its headings, bold, links, and lettered sub-lists.",
+				help: "Plain Markdown goes on the clipboard as well, so pasting into an editor or a terminal is unchanged. Pasting back into Obsidian gives you the Markdown you copied, not a reading of the HTML, because the copy carries its own source inside it. Turn this off if you want Obsidian's own plain copy back.",
+				build: (st) => {
+					st.addToggle((t) =>
+						t.setValue(s.richCopy).onChange((v) => {
+							s.richCopy = v;
+							save();
+						})
+					);
+				},
+			},
+			{
+				name: "Indent guides on lists",
+				desc: "The vertical rule Obsidian draws down each indent level.",
+				help: "A numbered list already says how deep an item sits twice over - the numbering itself, and the a, b, c under it - so a third cue reads as a line ruled through your text. A bulleted list has nothing else saying it, which is why hiding those is a separate choice rather than the default. Both views, and Obsidian's own setting still governs whether guides exist at all.",
+				build: (st) => {
+					st.addDropdown((d) =>
+						d
+							.addOption("all", "Show on every list")
+							.addOption("no-ordered", "Hide on numbered lists")
+							.addOption("none", "Hide on every list")
+							.setValue(s.indentGuides)
+							.onChange((v) => {
+								s.indentGuides = v as PowerEditorSettings["indentGuides"];
+								save();
+								this.plugin.applyListGuides();
+							})
+					);
+				},
+			},
+			{
+				name: "Line spacing",
+				desc: "How much your pages breathe (applies to editing and reading views).",
+				help: "Sets the gap between lines everywhere you read and write. Compact fits more on screen; Relaxed is gentler for long reading.",
+				build: (st) => {
+					st.addDropdown((d) =>
+						d
+							.addOption("compact", "Compact")
+							.addOption("normal", "Normal")
+							.addOption("relaxed", "Relaxed")
+							.setValue(s.lineSpacing)
+							.onChange((v) => {
+								s.lineSpacing = v as PowerEditorSettings["lineSpacing"];
+								save();
+								this.plugin.applySpacing();
+							})
+					);
+				},
+			},
+			this.gapRow(
+				"Space under headings",
+				"Markdown puts a blank line under a heading, and in editing view that line takes a full line's height. This shrinks it so a heading sits closer to what it introduces.",
+				"headingGap",
+				"A normal line is about 24px, so Half is half. Type your own number in the box for anything in between (0 to 60). None removes the gap entirely, the blank line stays in the file, so the Markdown is unchanged, it just stops taking up room. Editing view only; the cursor looks short while it sits on that line and returns to normal as soon as you type."
+			),
+			this.gapRow(
+				"Space around tables",
+				"A table has a blank line on both sides and Markdown needs both, delete one and the table stops being a table. This shrinks them, and trims the table's own bottom padding to match.",
+				"tableGap",
+				"Set independently of headings, because a table usually wants a little more room than a paragraph does. Where a table follows a heading directly, the heading setting wins, so a heading sits the same distance from whatever comes next. The table's bottom padding never goes below 6px, so the row drag handles keep their room."
+			),
+			{
+				name: "Show when the note was last edited",
+				desc: "A quiet line under the note's title: “Edited 3 minutes ago”. Click it to swap between the relative time and the exact date.",
+				help: "Reads the file's own modified time, so it is right without you maintaining anything. If a note has an `updated:` (or `modified:`) property in its frontmatter, that wins instead, useful in a synced vault, where the sync client can rewrite the file's modified time when a note arrives from another device and make it look freshly edited.",
+				build: (st) => {
+					st.addDropdown((d) =>
+						d
+							.addOption("labeled", "Yes, with the word Edited")
+							.addOption("bare", "Yes, just the time")
+							.addOption("off", "Off")
+							.setValue(s.showEdited)
+							.onChange((v) => {
+								s.showEdited = v as PowerEditorSettings["showEdited"];
+								save();
+								this.plugin.updatePageChrome();
+							})
+					);
+				},
+			},
+			{
+				name: "Where to show it",
+				desc: "Under the note's title, at the very end of the note, or in both places.",
+				help: "Under the title is the Notion habit: you see it as you arrive. The line variant is the same spot pulled tight against the title with a hairline drawn between them, so the title and the date read as one page header instead of as two stray lines above your first paragraph. At the end is closer to 1Password, where the detail sits out of the way until you go looking. Both is fine on long notes, where the title has scrolled away by the time you wonder.",
+				build: (st) => {
+					st.addDropdown((d) =>
+						d
+							.addOption("title", "Under the title")
+							.addOption("rule", "Under the title, with a line above it")
+							.addOption("bottom", "At the end of the note")
+							.addOption("both", "Both")
+							.setValue(s.editedPosition)
+							.onChange((v) => {
+								s.editedPosition = v as PowerEditorSettings["editedPosition"];
+								save();
+								this.plugin.updatePageChrome();
+							})
+					);
+				},
+			},
+			{
+				name: "Time format",
+				desc: "How the time itself reads.",
+				help: "Relative answers 'is this stale?' at a glance; exact answers 'which version is this?'. Whichever you pick, clicking the stamp shows both for that note until you click it again, and hovering always shows the exact time.",
+				build: (st) => {
+					st.addDropdown((d) =>
+						d
+							.addOption("relative", "Relative (3 minutes ago)")
+							.addOption("exact", "Exact date and time")
+							.addOption("both", "Relative, then the exact date")
+							.setValue(s.editedFormat)
+							.onChange((v) => {
+								s.editedFormat = v as PowerEditorSettings["editedFormat"];
+								save();
+								this.plugin.updatePageChrome();
+							})
+					);
+				},
+			},
+			{
+				name: "Code block theme",
+				desc: "The syntax palette for fenced code. The dark ones are the editor themes Claude and ChatGPT render code in.",
+				help: "A dark code block inside a light note is what Claude, ChatGPT, and most documentation sites do, because saturated syntax colors need a dark surface to sit on. Vivid Light keeps the light background with stronger colors than Obsidian's own. Whichever you pick, code only takes color when the fence names a language, use the language button on the block to set or change it.",
+				build: (st) => {
+					st.addDropdown((d) =>
+						d
+							.addOption("vivid", "Vivid Light")
+							.addOption("one-dark", "One Dark")
+							.addOption("dracula", "Dracula")
+							.addOption("monokai", "Monokai")
+							.addOption("github-dark", "GitHub Dark")
+							.addOption("default", "Follow my Obsidian theme")
+							.setValue(s.codeTheme)
+							.onChange((v) => {
+								s.codeTheme = v as PowerEditorSettings["codeTheme"];
+								save();
+								this.plugin.applyCodeTheme();
+							})
+					);
+				},
+			},
+			{
+				name: "Line numbers in code blocks",
+				desc: "A numbered gutter down the left of every fenced block.",
+				help: "Numbers count from 1 within each block, not from the note's line count, so they match what you would see if the file were open in an editor. They are drawn, not written into the note, so copying the block copies the code alone.",
+				build: (st) => {
+					st.addToggle((t) =>
+						t.setValue(s.codeLineNumbers).onChange((v) => {
+							s.codeLineNumbers = v;
+							save();
+							this.plugin.applyCodeTheme();
+						})
+					);
+				},
+			},
+		];
+
+		const lists: Row[] = [
+			{
+				name: "Multilevel numbering (outline style)",
+				desc: "Style nested numbered lists by level (1, 2, 3 then a, b, c then i, ii, iii) instead of restarting at 1 everywhere. Applies in editing and reading views; the raw number shows while your cursor is on the line.",
+				help: "Nested numbered lists cascade through the styles you set per level instead of every level starting at 1. Choose each level below. The plain number reappears while your cursor is on that line so renumbering stays normal.",
+				build: (st) => {
+					st.addToggle((t) =>
+						t.setValue(s.numberedOutline).onChange((v) => {
+							s.numberedOutline = v;
+							save();
+							this.plugin.applyOutlineCss();
+							this.plugin.refreshEditors();
+							this.refresh(); // the per-level rows below appear or go
+						})
+					);
+				},
+			},
+		];
+		if (s.numberedOutline) {
+			const ordinal = (n: number) => ["1st", "2nd", "3rd", "4th", "5th", "6th"][n] ?? `${n + 1}th`;
+			for (let level = 0; level < s.outlineStyles.length; level++) {
+				const at = level;
+				lists.push({
+					name: `${ordinal(at)} level`,
+					build: (st) => {
+						st.addDropdown((d) => {
+							for (const [value, label] of OUTLINE_CHOICES) d.addOption(value, label);
+							d.setValue(s.outlineStyles[at]).onChange((v) => {
+								s.outlineStyles[at] = v;
+								save();
+								this.plugin.applyOutlineCss();
+								this.plugin.refreshEditors();
+							});
+						});
+					},
+				});
+			}
+		}
+
+		const clipboard: Row[] = [
+			{
+				name: "Clean pasted HTML",
+				desc: "Pasting from Word, Outlook, a web page, or an AI chat converts to clean Markdown automatically, tables included. The 'Paste as clean Markdown' command does it on demand.",
+				help: "Strips the hidden styling that Word, Outlook, and web pages carry and turns it into plain Markdown. Tables keep their rows and columns, so a comparison copied out of ChatGPT, Claude, or Grok lands as a real table instead of one run-on paragraph. When this is off, the 'Paste as clean Markdown' command still does it on request.",
+				build: (st) => {
+					st.addToggle((t) => t.setValue(s.cleanPaste).onChange((v) => ((s.cleanPaste = v), save())));
+				},
+			},
+			{
+				name: "Clean copied text",
+				desc: "Highlighted or colored text stores HTML in the note. Clean removes those tags when you copy, so other apps get readable text and keep bold and italics. Plain text also drops the Markdown so nothing but the words is left. Off leaves copying to Obsidian.",
+				help: "Pick Plain text if you want pasted words with no ** or highlight tags at all. Clean keeps bold and italics but removes the color HTML. This only affects copying from editing view; Reading view already copies plain text.",
+				build: (st) => {
+					st.addDropdown((d) =>
+						d
+							.addOption("clean", "Clean (remove highlight and color tags)")
+							.addOption("plain", "Plain text (remove all formatting)")
+							.addOption("off", "Off (Obsidian default)")
+							.setValue(s.copyMode)
+							.onChange((v) => {
+								s.copyMode = v as PowerEditorSettings["copyMode"];
+								save();
+							})
+					);
+				},
+			},
+		];
+
+		const todos: Row[] = [
+			{
+				name: "Completing a to-do stamps the date",
+				desc: "Checking a box appends a ✅ done date so dashboards can show when things got finished. Recurring items (🔁) always create their next occurrence either way. Query them anywhere with a 'todo' code block.",
+				help: "The stamped date is what the 'todo' dashboards use to show what got done and when. Recurring items still spawn their next date whether this is on or off.",
+				build: (st) => {
+					st.addToggle((t) => t.setValue(s.stampDoneDates).onChange((v) => ((s.stampDoneDates = v), save())));
+				},
+			},
+			{
+				name: "Quick capture inbox",
+				desc: "Where 'To-do: quick capture' appends new items. The note is created if it doesn't exist.",
+				help: "Give a path like Inbox.md or Tasks/Inbox.md. The note and any missing folders are created the first time you capture into it.",
+				build: (st) => {
+					st.addText((t) => t.setPlaceholder("Inbox.md").setValue(s.inboxNote).onChange((v) => ((s.inboxNote = v), save())));
+				},
+			},
+			{
+				name: "To-do reminders",
+				desc: "A due-today digest when Obsidian opens, and a notice the minute any '⏰ HH:MM' to-do comes due while the app is running.",
+				help: "Add a time to any item with the ⏰ emoji, like ⏰ 14:30, and a notice pops when it comes due while Obsidian is open. Phone push notifications are not possible from a plugin.",
+				build: (st) => {
+					st.addToggle((t) => t.setValue(s.todoReminders).onChange((v) => ((s.todoReminders = v), save())));
+				},
+			},
+		];
+
+		const ai: Row[] = [
+			{
+				name: "Anthropic API key",
+				desc: "Powers the bubble's AI actions (improve, fix grammar, shorten, summarize). Leave empty to reuse Power Assistant's key automatically.",
+				help: "Used only by the AI actions on the bubble and menu. It lives in this vault's settings and never appears in a note. Leave it blank and the plugin borrows Power Assistant's key when that plugin is installed.",
+				build: (st) => {
+					st.addText((t) => {
+						t.inputEl.type = "password";
+						t.setValue(s.anthropicKey).onChange((v) => ((s.anthropicKey = v.trim()), save()));
+					});
+				},
+			},
+			{
+				name: "Model",
+				help: "The Claude model the AI actions call. Haiku is fast and inexpensive for quick edits; a larger model gives stronger rewrites. Clear the box to restore the default.",
+				build: (st) => {
+					st.addText((t) => t.setValue(s.aiModel).onChange((v) => ((s.aiModel = v.trim() || "claude-haiku-4-5"), save())));
+				},
+			},
+			{
+				name: "Custom AI actions",
+				desc: 'Your own one-click instructions on the AI menu, e.g. "Rewrite as a customer-friendly email".',
+				help: "Each action is a label plus an instruction. The label shows on the AI menu; the instruction is applied to whatever text you have selected. Handy for repeated jobs like turning notes into a status update.",
+				build: (st) => {
+					st.addButton((b) =>
+						b.setButtonText("Add action").onClick(() => {
+							s.aiActions.push({ name: "", prompt: "" });
+							save();
+							this.refresh();
+						})
+					);
+				},
+			},
+		];
+		s.aiActions.forEach((a, idx) => {
+			ai.push({
+				name: "",
+				aliases: ["custom AI action"],
+				build: (st) => {
+					st.settingEl.addClass("ped-aiaction-row");
+					st.addText((t) => t.setPlaceholder("Menu label").setValue(a.name).onChange((v) => ((a.name = v), save())));
+					st.addTextArea((t) =>
+						t
+							.setPlaceholder("Instruction, e.g. Rewrite this as a friendly status update.")
+							.setValue(a.prompt)
+							.onChange((v) => ((a.prompt = v), save()))
+					);
+					st.addExtraButton((b) =>
+						b.setIcon("trash-2").setTooltip("Remove").onClick(() => {
+							s.aiActions.splice(idx, 1);
+							save();
+							this.refresh();
+						})
+					);
+					return () => st.settingEl.removeClass("ped-aiaction-row");
+				},
+			});
+		});
+
+		const dictation: Row[] = [
+			{
+				name: "Transcription endpoint",
+				desc: "Any OpenAI-compatible base URL, for example Groq. Leave empty to reuse Power Assistant's transcription automatically.",
+				help: "Where the recorded audio is sent to become text; only the /audio/transcriptions path under it is used. Leave it blank and dictation borrows Power Assistant's endpoint and key when that plugin is installed, so a vault running both needs no second setup. Point it at a server on your own machine to keep the audio local, in which case no key is needed.",
+				build: (st) => {
+					st.addText((t) =>
+						t
+							.setPlaceholder("https://api.groq.com/openai/v1")
+							.setValue(s.transcriptionEndpoint)
+							.onChange((v) => ((s.transcriptionEndpoint = v.trim()), save()))
+					);
+				},
+			},
+			{
+				name: "Transcription API key",
+				desc: "The key for the endpoint above. Empty is fine for a server on your own machine, or to fall back to Power Assistant's.",
+				help: "The bearer token for the endpoint above. It is stored in this vault's settings and sent only to that endpoint. A transcription server running on your own machine usually needs no key at all.",
+				build: (st) => {
+					st.addText((t) => {
+						t.inputEl.type = "password";
+						t.setPlaceholder("Leave empty to use Power Assistant's")
+							.setValue(s.transcriptionKey)
+							.onChange((v) => ((s.transcriptionKey = v.trim()), save()));
+					});
+				},
+			},
+			{
+				name: "Transcription model",
+				help: "The model name the endpoint expects, for example whisper-large-v3 on Groq. Leave it empty to use whisper-large-v3.",
+				build: (st) => {
+					st.addText((t) =>
+						t
+							.setPlaceholder("whisper-large-v3")
+							.setValue(s.transcriptionModel)
+							.onChange((v) => ((s.transcriptionModel = v.trim()), save()))
+					);
+				},
+			},
+			{
+				name: "After transcribing",
+				desc: "Raw inserts exactly what you said. Tidy removes filler and fixes punctuation; Bullets turns it into a list (both use the AI key). Right-click the mic to switch on the fly.",
+				help: "Tidy and Bullets send the transcript through the AI key, so they need a key set above. Raw needs no key. Right-click the microphone button to switch mode without opening settings.",
+				build: (st) => {
+					st.addDropdown((d) =>
+						d
+							.addOption("raw", "Insert the raw transcript")
+							.addOption("tidy", "Tidy into clean prose")
+							.addOption("bullets", "Turn into bullet points")
+							.setValue(s.dictationMode)
+							.onChange((v) => {
+								s.dictationMode = v as PowerEditorSettings["dictationMode"];
+								save();
+							})
+					);
+				},
+			},
+		];
+
+		return [
+			{
+				id: "toolbar",
+				label: "Toolbar",
+				groups: [
+					{ heading: "Toolbar", rows: toolbar },
+					{
+						heading: "Buttons",
+						help: "Which buttons appear on the toolbar, and in what order. A hidden button still works from the command palette and the slash menu.",
+						rows: buttons,
+					},
+				],
+			},
+			{ id: "editing", label: "Editing", groups: [{ heading: "Editing", rows: editing }] },
+			{ id: "lists", label: "Lists", groups: [{ heading: "Numbered list outline", rows: lists }] },
+			{ id: "clipboard", label: "Clipboard", groups: [{ heading: "Clipboard", rows: clipboard }] },
+			{ id: "todos", label: "To-dos", groups: [{ heading: "To-dos", rows: todos }] },
+			{
+				id: "ai",
+				label: "AI & dictation",
+				groups: [
+					{ heading: "AI edits", rows: ai },
+					{ heading: "Dictation", rows: dictation },
+				],
+			},
+		];
+	}
+
+	/** Headings and tables get the same control twice, so it is built once. */
+	private gapRow(name: string, desc: string, key: "headingGap" | "tableGap", hint: string): Row {
+		const s = this.plugin.settings;
+		const save = () => void this.plugin.persistSettings();
+		const GAPS: [string, string][] = [
+			["off", "Off (Obsidian default)"],
+			["18", "Roomy (18px)"],
+			["12", "Half (12px)"],
+			["8", "Tight (8px)"],
+			["4", "Very tight (4px)"],
+			["0", "None (0px)"],
+		];
+		return {
+			name,
+			desc,
+			help: hint,
+			build: (st) => {
+				st.addDropdown((d) => {
+					for (const [v, label] of GAPS) d.addOption(v, label);
+					// a value typed into the box beside it is not one of the presets;
+					// show it rather than snapping to something wrong
+					if (!GAPS.some(([v]) => v === s[key])) d.addOption(s[key], `Custom (${s[key]}px)`);
+					d.setValue(s[key]).onChange((v) => {
+						s[key] = v;
+						save();
+						this.plugin.applyBlockGap();
+						this.refresh(); // the Custom entry is rebuilt from the new value
+					});
+				});
+				st.addText((t) =>
+					t
+						.setPlaceholder("px")
+						.setValue(s[key] === "off" ? "" : s[key])
+						.onChange((v) => {
+							const n = Number(v.trim());
+							if (v.trim() === "" || !Number.isFinite(n) || n < 0 || n > 60) return;
+							s[key] = String(n);
+							save();
+							this.plugin.applyBlockGap();
+						})
+				);
+			},
+		};
+	}
+
+	/** Redraw the button list in place. Kept off the tab's own redraw because
+	 *  moving a button is a rapid, repeated action, and rebuilding the tab would
+	 *  throw you back to the top of the page on every click. */
+	private redrawButtonOrder() {
+		const list = this.orderList;
+		if (!list) return;
+		list.empty();
+		const s = this.plugin.settings;
+		const save = () => void this.plugin.persistSettings();
+		const hidden = new Set(s.hiddenButtons);
+		const labelOf = new Map(BUTTON_IDS);
+		const order = this.plugin.orderedButtonIds();
+		const move = (i: number, delta: number) => {
+			const j = i + delta;
+			if (j < 0 || j >= order.length) return;
+			[order[i], order[j]] = [order[j], order[i]];
+			s.buttonOrder = order;
+			save();
+			this.plugin.rebuildToolbars();
+			this.redrawButtonOrder();
+		};
+		order.forEach((id, i) => {
+			const row = new Setting(list);
+			if (id === "|") {
+				row.setName("Divider").setDesc("A vertical rule between groups.");
+				row.nameEl.addClass("ped-order-divider");
+			} else {
+				row.setName(labelOf.get(id) ?? id);
+			}
+
+			// Drag to reorder. The grip is the only handle, so a drag can never
+			// start from the toggle you were reaching for, and the row itself
+			// carries the drop target.
+			const el = row.settingEl;
+			el.addClass("ped-order-row");
+			const grip = createDiv({ cls: "ped-order-grip", attr: { "aria-label": "Drag to reorder", draggable: "true" } });
+			setIcon(grip, "grip-vertical");
+			el.prepend(grip);
+
+			// Keyboard parity, since a drag handle is unreachable without a mouse:
+			// focus the grip and use the arrow keys.
+			grip.tabIndex = 0;
+			grip.addEventListener("keydown", (e) => {
+				if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+				e.preventDefault();
+				move(i, e.key === "ArrowUp" ? -1 : 1);
+			});
+
+			grip.addEventListener("dragstart", (ev) => {
+				this.dragFrom = i;
+				el.addClass("is-dragging");
+				ev.dataTransfer?.setData("text/plain", String(i));
+				if (ev.dataTransfer) ev.dataTransfer.effectAllowed = "move";
+				// drag the whole row, not the little grip glyph
+				ev.dataTransfer?.setDragImage(el, 12, el.offsetHeight / 2);
+			});
+			grip.addEventListener("dragend", () => {
+				this.dragFrom = null;
+				list.findAll(".ped-order-row").forEach((r) => {
+					r.removeClass("is-dragging");
+					r.removeClass("drop-above");
+					r.removeClass("drop-below");
+				});
+			});
+
+			el.addEventListener("dragover", (ev) => {
+				if (this.dragFrom === null) return;
+				ev.preventDefault();
+				if (ev.dataTransfer) ev.dataTransfer.dropEffect = "move";
+				const r = el.getBoundingClientRect();
+				const below = ev.clientY > r.top + r.height / 2;
+				el.toggleClass("drop-above", !below);
+				el.toggleClass("drop-below", below);
+			});
+			el.addEventListener("dragleave", () => {
+				el.removeClass("drop-above");
+				el.removeClass("drop-below");
+			});
+			el.addEventListener("drop", (ev) => {
+				ev.preventDefault();
+				if (this.dragFrom === null) return;
+				const r = el.getBoundingClientRect();
+				const below = ev.clientY > r.top + r.height / 2;
+				const next = moveItem(order, this.dragFrom, below ? i + 1 : i);
+				this.dragFrom = null;
+				s.buttonOrder = next;
+				save();
+				this.plugin.rebuildToolbars();
+				this.redrawButtonOrder();
+			});
+
+			if (id === "|") {
+				row.addExtraButton((b) =>
+					b
+						.setIcon("trash-2")
+						.setTooltip("Remove this divider")
+						.onClick(() => {
+							const next = order.slice();
+							next.splice(i, 1);
+							s.buttonOrder = next;
+							save();
+							this.plugin.rebuildToolbars();
+							this.redrawButtonOrder();
+						})
+				);
+				return;
+			}
+			row.addToggle((t) =>
+				t.setValue(!hidden.has(id)).onChange((v) => {
+					if (v) hidden.delete(id);
+					else hidden.add(id);
+					s.hiddenButtons = [...hidden];
+					save();
+					this.plugin.rebuildToolbars();
+				})
+			);
+		});
 	}
 }
