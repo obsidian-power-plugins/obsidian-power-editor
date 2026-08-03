@@ -8,7 +8,9 @@ import {
 	duplicateBlock,
 	ensureBlockId,
 	guessLanguage,
+	indentedTables,
 	insertItemAbove,
+	removeItemAt,
 	formatFenceInfo,
 	narrowEdit,
 	parseFenceInfo,
@@ -1350,6 +1352,32 @@ eq(
 	'1. \n2. <mark style="background:#E2F5EA">Package this up</mark>\n3. Read this',
 	"the item carrying hidden HTML is moved down whole, never split"
 );
+
+// --- tables that sit inside a list step, which Live Preview leaves as pipes ---
+const TBL = L("1. one\n\t2. \n\t   | a | b |\n\t   | --- | --- |\n\t   | 1 | 2 |\n\t3. after");
+eq(indentedTables(TBL), [{ from: 2, to: 4, indent: "\t   " }], "the run of rows at one indent is the table");
+eq(indentedTables(L("| a |\n| --- |")), [], "a table at the margin is Obsidian's to draw");
+eq(indentedTables(L("  | a | b |\n  | c | d |")), [], "rows with no divider are not a table");
+eq(indentedTables(L("  | a |\n  | --- |\nafter")), [{ from: 0, to: 1, indent: "  " }], "a two-line table is still a table");
+eq(indentedTables(L("- see | this | line")), [], "a bullet with pipes in its words is not a table");
+
+// --- taking an empty item back out (Backspace or Delete on a bare marker) ---
+const drop = (src: string, line: number) => {
+	const r = removeItemAt(src.split("\n"), line);
+	return r ? r.lines.join("\n") : "null";
+};
+eq(drop("1. one\n2. two\n3. \n4. four", 2), "1. one\n2. two\n3. four", "the step after the empty one takes its number");
+eq(drop("1. one\n2. \n3. three\n4. four", 1), "1. one\n2. three\n3. four", "and the rest of the run counts on from there");
+eq(drop("1. \n2. two\n3. three", 0), "1. two\n2. three", "removing the first step leaves the run starting where it did");
+eq(drop("5. \n6. six\n7. seven", 0), "5. six\n6. seven", "a run that starts at 5 still starts at 5");
+eq(drop("1. one\n2. two\n3. ", 2), "1. one\n2. two", "removing the last step leaves the ones above it alone");
+eq(drop("- a\n- \n- c", 1), "- a\n- c", "a bulleted step needs no counting");
+eq(drop("1) one\n2) \n3) three", 1), "1) one\n2) three", "the ) delimiter is preserved");
+eq(drop("\t1. one\n\t2. \n\t3. three", 1), "\t1. one\n\t2. three", "a nested run is counted at its own indent");
+eq(drop("1. one\n\t1. \n2. two", 1), "1. one\n2. two", "a step at another level does not renumber the one around it");
+eq(drop("- [ ] \n- [ ] a task", 0), "- [ ] a task", "an empty task counts as a bare marker");
+eq(drop("1. one\n2. two", 1), "null", "a step with words on it is left to the key that asked");
+eq(drop("plain text", 0), "null", "so is a line that is not a step at all");
 
 // --- stripTags: is an item really empty once hidden markup is discounted ---
 eq(stripTags("<mark></mark>"), "", "a bare tag pair is empty");

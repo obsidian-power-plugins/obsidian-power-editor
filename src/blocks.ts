@@ -798,6 +798,64 @@ export function stripTags(s: string): string {
  *
  *  Only the contiguous run at the same indent is renumbered, so a nested list
  *  or a separate list further down keeps its own numbering. */
+/** Tables that sit inside a list step, as inclusive line ranges with the indent
+ *  that holds them there. Live Preview only draws a table that starts at the
+ *  left margin, so an indented one stays a grid of pipes on screen: this is
+ *  what the plugin has to draw itself.
+ *
+ *  A table is a run of lines at one indent, each opening with a pipe, whose
+ *  second line is the divider that makes it a table rather than a paragraph
+ *  full of them. */
+export function indentedTables(lines: string[]): { from: number; to: number; indent: string }[] {
+	const out: { from: number; to: number; indent: string }[] = [];
+	const row = /^([ \t]+)\|/;
+	for (let i = 0; i < lines.length; i++) {
+		const m = row.exec(lines[i]);
+		if (!m) continue;
+		const indent = m[1];
+		let to = i;
+		while (to + 1 < lines.length && lines[to + 1].startsWith(indent) && /^\|/.test(lines[to + 1].slice(indent.length))) to++;
+		const divider = lines[i + 1]?.slice(indent.length) ?? "";
+		if (to > i && /^\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)*\|?[ \t]*$/.test(divider)) out.push({ from: i, to, indent });
+		i = to;
+	}
+	return out;
+}
+
+/** Take out the step on `line`, which holds nothing but its marker, and renumber
+ *  what is left. Null when the line has words on it or is not a list item at
+ *  all, which leaves the key that asked to do whatever it normally does.
+ *
+ *  Deleting the marker a character at a time is what happens otherwise, and a
+ *  half-eaten marker is not a list item: the run breaks apart, and the source
+ *  numbering shows through where the rendered letters were. Removing the run's
+ *  first step keeps that step's own number, so a list that starts at 5 still
+ *  starts at 5. */
+export function removeItemAt(lines: string[], line: number): { lines: string[]; caret: number } | null {
+	const m = /^(\s*)((?:[-*+])|(\d+)([.)]))[ \t]*(?:\[.\][ \t]*)?$/.exec(lines[line] ?? "");
+	if (!m) return null;
+	const indent = m[1];
+	const out = [...lines.slice(0, line), ...lines.slice(line + 1)];
+	if (m[3] === undefined) return { lines: out, caret: line }; // a bullet: nothing to count
+	const sameRun = (s: string | undefined) => {
+		if (s === undefined) return null;
+		const mm = /^(\s*)(\d+)([.)])\s+/.exec(s);
+		return mm && mm[1] === indent ? mm : null;
+	};
+	// the step that moved up into its place is what has to be counted again;
+	// with nothing there, this was the run's last step and the rest still count
+	if (!sameRun(out[line])) return { lines: out, caret: line };
+	let first = line;
+	while (first > 0 && sameRun(out[first - 1])) first--;
+	let last = line;
+	while (last + 1 < out.length && sameRun(out[last + 1])) last++;
+	const start = Number((first === line ? m[3] : sameRun(out[first])?.[2]) ?? "1");
+	for (let i = first, n = start; i <= last; i++, n++) {
+		out[i] = out[i].replace(/^(\s*)(\d+)([.)])/, `$1${n}$3`);
+	}
+	return { lines: out, caret: line };
+}
+
 export function insertItemAbove(lines: string[], line: number): { lines: string[]; caret: number } | null {
 	const m = /^(\s*)((?:[-*+])|(\d+)([.)]))\s+/.exec(lines[line] ?? "");
 	if (!m) return null;

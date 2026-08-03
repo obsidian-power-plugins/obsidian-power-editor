@@ -42,7 +42,9 @@ import {
 	duplicateBlock,
 	ensureBlockId,
 	guessLanguage,
+	indentedTables,
 	insertItemAbove,
+	removeItemAt,
 	isTranscriptCalloutAt,
 	isTranscriptTurnAt,
 	listStretchRange,
@@ -679,7 +681,7 @@ const TODAY_VIEW = "ped-today";
 const COMMENTS_VIEW = "ped-comments-view";
 // Hardcoded so it reflects the RUNNING code, not the on-disk manifest (which a
 // stale/cached plugin module would still report as current). Bump every build.
-const PED_BUILD = "1.53.6";
+const PED_BUILD = "1.54.0";
 
 /** Every toolbar button, for the visibility settings. */
 const BUTTON_IDS: [string, string][] = [
@@ -780,6 +782,87 @@ const EMOJI: [string, string][] = [
 /** Hide the `[!type]` token on callout headers even at the cursor, so the
  *  header reads "> ❓ Title" while editing (cursor-independent, atomic, same
  *  philosophy as the WYSIWYG engine; follows the ped-wys toggle). */
+/** A table that sits inside a list step, drawn. Obsidian's Live Preview only
+ *  draws a table that starts at the left margin, so one written into a step
+ *  stays a grid of pipes on screen no matter how correct it is. The rows are
+ *  handed to Obsidian's own renderer with the step's indent taken off, so it
+ *  comes out as the table the theme draws everywhere else. */
+class ListTableWidget extends WidgetType {
+	constructor(
+		private md: string,
+		private indent: string,
+		private plugin: PowerEditorPlugin,
+		private at: number
+	) {
+		super();
+	}
+
+	eq(other: ListTableWidget) {
+		return other.md === this.md && other.indent === this.indent;
+	}
+
+	toDOM(view: EditorView) {
+		const host = createDiv({ cls: "ped-list-table" });
+		// the indent itself, written out rather than measured: the same
+		// characters in the same font put the table under the step's words
+		// however the theme happens to draw them
+		host.createSpan({ cls: "ped-list-table-pad", text: this.indent });
+		const body = host.createDiv({ cls: "ped-list-table-body" });
+		const child = new MarkdownRenderChild(body);
+		this.plugin.addChild(child);
+		void MarkdownRenderer.render(this.plugin.app, this.md, body, this.plugin.app.workspace.getActiveFile()?.path ?? "", child);
+		// clicking it asks for the source, the way Live Preview hands any block
+		// back when the cursor lands in it
+		host.addEventListener("mousedown", (e) => {
+			e.preventDefault();
+			view.dispatch({ selection: { anchor: this.at }, scrollIntoView: true });
+			view.focus();
+		});
+		return host;
+	}
+
+	ignoreEvent() {
+		return false;
+	}
+}
+
+/** The tables inside list steps, drawn while the cursor is elsewhere. */
+const listTables = (plugin: PowerEditorPlugin) =>
+	ViewPlugin.fromClass(
+		class {
+			deco: DecorationSet;
+
+			constructor(view: EditorView) {
+				this.deco = this.build(view);
+			}
+
+			update(u: ViewUpdate) {
+				if (u.docChanged || u.viewportChanged || u.selectionSet) this.deco = this.build(u.view);
+			}
+
+			build(view: EditorView): DecorationSet {
+				const b = new RangeSetBuilder<Decoration>();
+				const doc = view.state.doc;
+				const lines = doc.toString().split("\n");
+				const sel = view.state.selection.main;
+				for (const t of indentedTables(lines)) {
+					const from = doc.line(t.from + 1).from;
+					const to = doc.line(t.to + 1).to;
+					// the cursor inside it means it is being edited, and text is
+					// what can be edited
+					if (sel.to >= from && sel.from <= to) continue;
+					const md = lines
+						.slice(t.from, t.to + 1)
+						.map((l) => (l.startsWith(t.indent) ? l.slice(t.indent.length) : l.trimStart()))
+						.join("\n");
+					b.add(from, to, Decoration.replace({ widget: new ListTableWidget(md, t.indent, plugin, from), block: true }));
+				}
+				return b.finish();
+			}
+		},
+		{ decorations: (v) => v.deco }
+	);
+
 const calloutTokenHider = ViewPlugin.fromClass(
 	class {
 		deco: DecorationSet;
@@ -1268,6 +1351,9 @@ function stepAbove(doc: { lines: number; line(n: number): { from: number; text: 
 	}
 	return null;
 }
+
+/** A line's leading whitespace, in characters. */
+const leadOf = (line: string | undefined): number => /^[ \t]*/.exec(line ?? "")?.[0].length ?? 0;
 
 /** The rendered line holding `pos`, for reading and writing its own geometry. */
 const lineElAt = (view: EditorView, pos: number): HTMLElement | null => {
@@ -2364,6 +2450,58 @@ export default class PowerEditorPlugin extends Plugin {
 			true
 		);
 
+		// Backspace or Delete at the end of a step that holds nothing but its
+		// marker takes the step out, the way a word processor does.
+		//
+		// Otherwise the marker goes one character at a time: the space, then the
+		// dot, then the number. Every one of those states is a line that is no
+		// longer a list item, so the run breaks apart under the cursor and the
+		// source numbering shows through where the rendered letters were: "d."
+		// becomes "4." on the first press. Delete is worse, since it pulls the
+		// next step onto this line instead of taking this one away, and that
+		// step's marker lands in the middle of the line as text.
+		this.registerDomEvent(
+			document,
+			"keydown",
+			(e: KeyboardEvent) => {
+				const back = e.key === "Backspace";
+				if ((!back && e.key !== "Delete") || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				const cm = view ? this.cmOf(view) : null;
+				if (!cm || !cm.hasFocus) return;
+				const sel = cm.state.selection.main;
+				if (!sel.empty) return;
+				const doc = cm.state.doc;
+				const line = doc.lineAt(sel.from);
+				// only from the end of the line, so editing a marker on purpose is
+				// still character by character
+				if (sel.from !== line.to) return;
+				if (back ? line.number === 1 : line.number === doc.lines) return; // nothing to fall back to
+				const lines = doc.toString().split("\n");
+				const res = removeItemAt(lines, line.number - 1);
+				if (!res) return;
+				e.preventDefault();
+				e.stopPropagation();
+				const d = narrowEdit(lines, res.lines);
+				let from = doc.line(d.from + 1).from;
+				let to = doc.line(d.to + 1).to;
+				// a whole line and nothing to put back: the break goes with it, or
+				// the line stays behind as an empty one
+				if (!d.text.length) {
+					if (d.to + 2 <= doc.lines) to = doc.line(d.to + 2).from;
+					else from = doc.line(d.from).to;
+				}
+				cm.dispatch({
+					changes: { from, to, insert: d.text.join("\n") },
+					// backspace lands at the end of the step above; delete stays put,
+					// at the words of the step that moved up into this one's place
+					selection: { anchor: back ? doc.line(line.number - 1).to : line.from + listContentIndent(res.lines[line.number - 1] ?? "").length },
+					scrollIntoView: true,
+				});
+			},
+			true
+		);
+
 		// Enter inside a fenced code block: keep the block's left edge, and on a
 		// blank last line, leave the block.
 		//
@@ -2423,6 +2561,7 @@ export default class PowerEditorPlugin extends Plugin {
 		);
 
 		this.registerEditorExtension(calloutTokenHider);
+		this.registerEditorExtension(listTables(this));
 		this.registerEditorExtension(codeBlockChrome);
 		// the "Set language" chip on an unlabelled fence
 		this.registerDomEvent(document, "click", (e) => {
@@ -4923,11 +5062,9 @@ export default class PowerEditorPlugin extends Plugin {
 
 	private insertColumns(ed: Editor, layout: ColumnLayout) {
 		const cur = ed.getCursor();
-		const atLineStart = ed.getLine(cur.line).slice(0, cur.ch).trim() === "";
-		const block = columnsSnippet(layout) + "\n";
-		const text = atLineStart ? block : "\n" + block;
-		ed.replaceRange(text, cur);
-		ed.setCursor({ line: cur.line + (atLineStart ? 1 : 2), ch: 0 });
+		const written = this.insertBlockAt(ed, columnsSnippet(layout) + "\n", cur);
+		const fence = Math.max(0, written.findIndex((l) => l.trim()));
+		ed.setCursor({ line: cur.line + fence + 1, ch: leadOf(written[fence + 1]) });
 	}
 
 	/** Word-style insert-table grid: sweep to the size you want, click. */
@@ -4965,10 +5102,26 @@ export default class PowerEditorPlugin extends Plugin {
 		pop.style.top = r.bottom + 6 + "px";
 	}
 
+	/** Write a block where the cursor is, the way a pasted one lands: on a line
+	 *  of its own, and at the content column of the list step it was written in.
+	 *  Put in where the cursor stands, its second line stays at column 0, which
+	 *  ends the list and leaves the block outside the step. A table takes the
+	 *  rest of the note with it when that happens, since what follows an opened
+	 *  table reads as more of the table. Returns the lines as written, so the
+	 *  caller can put the caret inside them. */
+	insertBlockAt(ed: Editor, md: string, pos: EditorPosition): string[] {
+		const line = ed.getLine(pos.line);
+		const text = planPastedMarkdown(md, line.slice(0, pos.ch), line.slice(pos.ch));
+		ed.replaceRange(text, pos);
+		return text.split("\n");
+	}
+
 	private insertTableAt(ed: Editor, cols: number, rows: number) {
 		const cur = ed.getCursor();
-		ed.replaceRange("\n" + tableSnippet(cols, rows) + "\n", { line: cur.line, ch: ed.getLine(cur.line).length });
-		ed.setCursor({ line: cur.line + 1, ch: 2 });
+		const pos = { line: cur.line, ch: ed.getLine(cur.line).length };
+		const written = this.insertBlockAt(ed, tableSnippet(cols, rows), pos);
+		const first = Math.max(0, written.findIndex((l) => /^[ \t]*\|/.test(l)));
+		ed.setCursor({ line: pos.line + first, ch: leadOf(written[first]) + 2 });
 	}
 
 	private clearFormatting(ed: Editor) {
@@ -7177,10 +7330,14 @@ class SlashSuggest extends EditorSuggest<SlashItem> {
 		const snippet = (title: string, icon: string, text: string, cursorUp = 0, ch = 0): SlashItem => ({
 			title,
 			icon,
-			action: (ed) => {
+			action: (ed, plugin) => {
 				const cur = ed.getCursor();
-				ed.replaceRange(text, cur);
-				ed.setCursor({ line: cur.line + (text.split("\n").length - 1) - cursorUp, ch });
+				// the block may gain a line on the way in, and inside a list step
+				// it gains an indent as well, so the caret is placed from what was
+				// actually written rather than from what was asked for
+				const written = plugin.insertBlockAt(ed, text, cur);
+				const target = Math.max(0, written.length - 1 - cursorUp);
+				ed.setCursor({ line: cur.line + target, ch: (target ? leadOf(written[target]) : cur.ch) + ch });
 			},
 		});
 		const out: SlashItem[] = [

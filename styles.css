@@ -2660,6 +2660,38 @@ body.ped-no-guides .markdown-rendered.show-indentation-guide li > ol::before {
 	margin: 0;
 }
 
+/* ---------- a table inside a list step ----------
+   Live Preview only draws a table that starts at the left margin, so one
+   written into a step stays a grid of pipes. The plugin draws it instead, with
+   Obsidian's own renderer, so the theme's table styling applies as it stands.
+   The indent that holds it inside the step goes with the pipes, so the drawn
+   table is put back under the step's words here. */
+.markdown-source-view.mod-cm6 .ped-list-table {
+	display: flex;
+	align-items: flex-start;
+	padding-block: 4px;
+}
+
+.markdown-source-view.mod-cm6 .ped-list-table-pad {
+	flex: 0 0 auto;
+	white-space: pre;
+}
+
+.markdown-source-view.mod-cm6 .ped-list-table-body {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-x: auto;
+}
+
+.markdown-source-view.mod-cm6 .ped-list-table-body table {
+	margin-block: 0;
+}
+
+/* a drawn block is not text: it should not look like a click missed it */
+.markdown-source-view.mod-cm6 .ped-list-table * {
+	cursor: default;
+}
+
 /* ---------- a code block inside a list step ----------
    The block belongs to the step it was written in, so the card is drawn from
    that step's own text column across instead of from the note's margin: the
