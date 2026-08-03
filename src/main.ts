@@ -56,7 +56,7 @@ import {
 	transformBlock,
 	unionBlockRange,
 } from "./blocks";
-import { cleanPastedHtml, escapePlaceholderTags, findPlaceholderTags, isOneMarkdownTable, looksLikeMarkdownTable, padPastedMarkdown, tabbedTextToMarkdown, type PlaceholderTag } from "./clean";
+import { cleanPastedHtml, escapePlaceholderTags, FENCE_LINE, fenceIndent, findPlaceholderTags, insideFence, isOneMarkdownTable, listContentIndent, looksLikeMarkdownTable, nextItemAfterFence, planPastedMarkdown, tabbedTextToMarkdown, textBesideMarker, type PlaceholderTag } from "./clean";
 import { buildMultipart, planDictationInsert } from "./dictate";
 import { editEmbed, embedInfo, removeEmbed, resizeEmbed } from "./embed";
 import {
@@ -679,7 +679,7 @@ const TODAY_VIEW = "ped-today";
 const COMMENTS_VIEW = "ped-comments-view";
 // Hardcoded so it reflects the RUNNING code, not the on-disk manifest (which a
 // stale/cached plugin module would still report as current). Bump every build.
-const PED_BUILD = "1.52.4";
+const PED_BUILD = "1.53.6";
 
 /** Every toolbar button, for the visibility settings. */
 const BUTTON_IDS: [string, string][] = [
@@ -956,6 +956,29 @@ class CopyCodeWidget extends WidgetType {
 	}
 }
 
+/** The lines the selection touches, as a key that changes only when it moves
+ *  to another line. */
+const selLines = (state: EditorState): string => {
+	const s = state.selection.main;
+	return `${state.doc.lineAt(s.from).number}:${state.doc.lineAt(s.to).number}`;
+};
+
+/** The card's left padding, on a fence that opens on a step's own line. The
+ *  step's number has to stay in the list's column, so the line cannot be pushed
+ *  in as a whole; this stands between the number and the fence instead, which
+ *  puts the fence where the code below it starts. */
+class CardPadWidget extends WidgetType {
+	eq() {
+		return true;
+	}
+
+	toDOM() {
+		const s = document.createElement("span");
+		s.className = "ped-cb-pad";
+		return s;
+	}
+}
+
 /** The filename on a fence, shown at the left of the header the way Claude
  *  labels a file. Click to rename; empty until you give it one. */
 class FileNameWidget extends WidgetType {
@@ -1025,13 +1048,95 @@ class LangButtonWidget extends WidgetType {
 const codeBlockChrome = ViewPlugin.fromClass(
 	class {
 		deco: DecorationSet;
+		/** Blocks that sit inside a list step, for the measuring pass. */
+		insets: { start: number; end: number; markerPos: number; stepMarkerPos: number; stepTextPos: number }[] = [];
+
+		/** The lines the selection is on, since a fence hides itself unless the
+		 *  cursor is on that line. Rebuilding on every selection change would
+		 *  rescan the note for a cursor that only moved along a line. */
+		onLines = "";
+		/** What the last measurement found, by opening line. The decorations
+		 *  carry it, so a line CodeMirror redraws on its own comes back with the
+		 *  measured edge rather than the estimate: a card whose rows disagree
+		 *  about where they start is a card that looks broken in half. */
+		measured = new Map<number, { x: number; pull: number }>();
 
 		constructor(view: EditorView) {
+			this.onLines = selLines(view.state);
 			this.deco = this.build(view);
+			this.align(view);
 		}
 
 		update(u: ViewUpdate) {
-			if (u.docChanged || u.viewportChanged) this.deco = this.build(u.view);
+			const lines = selLines(u.state);
+			if (u.docChanged || u.viewportChanged || u.geometryChanged || lines !== this.onLines) {
+				this.onLines = lines;
+				this.deco = this.build(u.view);
+			}
+			// every update, not only the rebuilds: CodeMirror redraws single
+			// lines for reasons of its own, and each redraw is a chance for one
+			// row of a card to be left behind the rest
+			this.align(u.view);
+		}
+
+		/** Where a step's own words sit is settled by the theme's fonts, the
+		 *  list's indent and the note's width, and the one place all three have
+		 *  agreed is the rendered line. So the card's left edge is read off the
+		 *  step above rather than worked out from character widths, and the
+		 *  fence's line is pulled by whatever the two disagree by, which is what
+		 *  puts its number in the column with the numbers above and below it.
+		 *  The build's own estimate stands until this lands, and stays whenever
+		 *  the lines it needs are scrolled out of view. */
+		align(view: EditorView) {
+			if (!this.insets.length) return;
+			const blocks = this.insets;
+			view.requestMeasure<({ start: number; end: number; x: number; pull: number } | null)[]>({
+				read: (v) =>
+					blocks.map((b) => {
+						try {
+							const doc = v.state.doc;
+							if (b.end > doc.lines || b.stepTextPos < 0) return null;
+							const head = lineElAt(v, doc.line(b.start).from);
+							const text = v.coordsAtPos(b.stepTextPos);
+							if (!head || !text) return null; // scrolled out of view: leave it as it stands
+							// The number on the fence's line is measured against the
+							// number above it, not the card, since a widget stands
+							// between it and the code. That line already carries the
+							// last pull, so what is measured now is only what was
+							// left over: adding it converges, and once the two agree
+							// it changes nothing.
+							const mine = b.markerPos >= 0 ? v.coordsAtPos(b.markerPos) : null;
+							const theirs = b.stepMarkerPos >= 0 ? v.coordsAtPos(b.stepMarkerPos) : null;
+							const carried = this.measured.get(b.start)?.pull ?? 0;
+							return {
+								start: b.start,
+								end: b.end,
+								x: text.left - head.getBoundingClientRect().left,
+								pull: mine && theirs ? carried + (mine.left - theirs.left) : 0,
+							};
+						} catch {
+							return null; // a line the view has not built yet
+						}
+					}),
+				write: (vals, v) => {
+					for (const r of vals) {
+						if (!r || r.x <= 0) continue;
+						// kept for the next build, and written now so this frame is
+						// already right rather than right one redraw later
+						this.measured.set(r.start, { x: Math.round(r.x), pull: Math.round(r.pull) });
+						try {
+							for (let n = r.start; n <= r.end && n <= v.state.doc.lines; n++) {
+								const el = lineElAt(v, v.state.doc.line(n).from);
+								if (!el) continue;
+								el.style.setProperty("--ped-cb-x", `${Math.round(r.x)}px`);
+								if (n === r.start) el.style.setProperty("--ped-cb-pull", `${Math.round(r.pull)}px`);
+							}
+						} catch {
+							/* the view moved on; the next measurement lands it */
+						}
+					}
+				},
+			});
 		}
 
 		build(view: EditorView): DecorationSet {
@@ -1040,24 +1145,33 @@ const codeBlockChrome = ViewPlugin.fromClass(
 			// One pass for the fence map. Fence state only makes sense counted
 			// from the top of the document, and doing that per candidate line
 			// was quadratic; this is linear and reused for every visible range.
-			const blocks: { start: number; end: number; lang: string; file: string; mark: string }[] = [];
-			let open: { start: number; lang: string; file: string; mark: string } | null = null;
+			const blocks: { start: number; end: number; lang: string; file: string; mark: string; indent: string; lead: number; marker: number; closed: boolean }[] = [];
+			let open: { start: number; lang: string; file: string; mark: string; indent: string; lead: number; marker: number } | null = null;
 			for (let n = 1; n <= doc.lines; n++) {
 				// the info string may carry a filename after the language, so it
 				// is captured whole and parsed rather than matched narrowly
-				const m = /^(\s*)(`{3,}|~{3,})(.*)$/.exec(doc.line(n).text);
+				const m = FENCE_LINE.exec(doc.line(n).text);
 				if (!m) continue;
-				const closing = !m[3].trim();
+				const closing = !m[4].trim();
 				if (!open) {
-					const info = parseFenceInfo(m[3]);
-					open = { start: n, lang: info.lang, file: info.file, mark: m[2] };
-				} else if (closing && m[2][0] === open.mark[0] && m[2].length >= open.mark.length) {
-					blocks.push({ ...open, end: n });
+					const info = parseFenceInfo(m[4]);
+					open = { start: n, lang: info.lang, file: info.file, mark: m[3], indent: m[1] + " ".repeat(m[2]?.length ?? 0), lead: m[1].length + (m[2]?.length ?? 0), marker: m[2]?.length ?? 0 };
+				} else if (closing && m[3][0] === open.mark[0] && m[3].length >= open.mark.length) {
+					blocks.push({ ...open, end: n, closed: true });
 					open = null;
 				}
 			}
-			if (open) blocks.push({ ...open, end: doc.lines }); // unclosed fence
+			if (open) blocks.push({ ...open, end: doc.lines, closed: false }); // unclosed fence
 			const numbers = document.body.hasClass("ped-cb-nums");
+			let tab = 0; // read once, and only when a block is actually indented
+			this.insets = [];
+			// Live Preview shows a block's fences whenever the cursor is anywhere
+			// inside it, so clicking into the code breaks the card open and puts
+			// its ``` on screen. The card's header is already the fence made
+			// readable, language and all, so a fence stays hidden unless the
+			// cursor is on its own line, which is where it can be edited.
+			const sel = view.state.selection.main;
+			const on = (n: number) => n >= doc.lineAt(sel.from).number && n <= doc.lineAt(sel.to).number;
 
 			for (const blk of blocks) {
 				const visible = view.visibleRanges.some((r) => doc.lineAt(r.to).number >= blk.start && doc.lineAt(r.from).number <= blk.end);
@@ -1066,18 +1180,73 @@ const codeBlockChrome = ViewPlugin.fromClass(
 				const label = blk.lang
 					? (LANG_LABEL[blk.lang] ?? CODE_LANGS.find(([v]) => v === blk.lang)?.[1] ?? blk.lang)
 					: "Plain text";
-				b.add(head.from, head.from, Decoration.line({ attributes: { class: "ped-cb-head" } }));
+				// A block inside a list item is indented to that step's own text
+				// column, and the card is drawn from there across rather than
+				// from the note's margin, so the step's number stays beside it
+				// instead of being swallowed by it. The width is the indent in
+				// code characters, which is exactly what the indent measures.
+				// The last measurement stands in for it once there is one, so every
+				// row of the card starts in the same place even when CodeMirror
+				// redraws one of them by itself.
+				const found = this.measured.get(blk.start);
+				const inset = blk.indent ? `--ped-cb-x:${found ? `${found.x}px` : `${indentColumns(blk.indent, (tab ||= tabWidth(view)))}ch`}` : "";
+				// A fence that opens on the step's own line keeps that line's
+				// number where the list put it; one on a line of its own has
+				// nothing but indent in front of it, so it is set like the code.
+				const onStep = inset && blk.marker > 0;
+				const step = inset ? stepAbove(doc, blk.start, blk.indent.length) : null;
+				if (inset) {
+					this.insets.push({
+						start: blk.start,
+						end: blk.end,
+						markerPos: onStep ? head.from + blk.lead - blk.marker : -1,
+						stepMarkerPos: step?.marker ?? -1,
+						stepTextPos: step?.text ?? -1,
+					});
+				}
+				const headAttrs: Record<string, string> = { class: ["ped-cb-head", inset ? "ped-cb-in" : "", onStep ? "ped-cb-step" : ""].filter(Boolean).join(" ") };
+				if (inset) headAttrs.style = found ? `${inset};--ped-cb-pull:${found.pull}px` : inset;
+				b.add(head.from, head.from, Decoration.line({ attributes: headAttrs }));
+				// a fence on its own line is indented like the code below it, so
+				// the indent goes the same way the code's does
+				if (inset && !onStep && head.text.startsWith(blk.indent)) b.add(head.from, head.from + blk.indent.length, Decoration.replace({}));
+				// the step's number ends where its words would start, which is the
+				// card's own edge: the fence needs the card's padding after it to
+				// line up with the code underneath
+				if (onStep) b.add(head.from + blk.lead, head.from + blk.lead, Decoration.widget({ widget: new CardPadWidget(), side: -1 }));
+				if (!on(blk.start) && head.to > head.from + blk.lead) b.add(head.from + blk.lead, head.to, Decoration.replace({}));
 				b.add(head.to, head.to, Decoration.widget({ widget: new FileNameWidget(blk.start - 1, blk.file), side: 0 }));
 				b.add(head.to, head.to, Decoration.widget({ widget: new LangButtonWidget(blk.start - 1, label), side: 1 }));
-				b.add(head.to, head.to, Decoration.widget({ widget: new CopyCodeWidget(fenceBody(doc, blk.start, blk.mark)), side: 2 }));
-				if (!numbers) continue;
+				b.add(head.to, head.to, Decoration.widget({ widget: new CopyCodeWidget(fenceBody(doc, blk.start, blk.mark, blk.indent)), side: 2 }));
 				// The gutter number is the line's position INSIDE the block, and
 				// it comes from the real line number rather than a CSS counter
 				// CodeMirror only renders what is on screen, so a counter would
 				// restart partway down a long block.
-				for (let n = blk.start + 1; n < blk.end; n++) {
-					b.add(doc.line(n).from, doc.line(n).from, Decoration.line({ attributes: { class: "ped-cb-body", "data-ped-ln": String(n - blk.start) } }));
+				for (let n = blk.start + 1; n <= blk.end; n++) {
+					const line = doc.line(n);
+					const closing = n === blk.end;
+					const body = numbers && !closing;
+					// The indent is what holds the block inside the step; it is not
+					// part of the code, so it is not drawn. Replaced rather than
+					// merely made invisible: a caret in text of no size is a caret
+					// of no height, which is a caret nobody can see.
+					const hideIndent = inset && line.text.startsWith(blk.indent);
+					const attrs: Record<string, string> = { class: [body ? "ped-cb-body" : "", inset ? "ped-cb-in" : ""].filter(Boolean).join(" ") };
+					if (body) attrs["data-ped-ln"] = String(n - blk.start);
+					if (inset) attrs.style = inset;
+					if (attrs.class) b.add(line.from, line.from, Decoration.line({ attributes: attrs }));
+					// the closing fence goes the same way as the opening one: with
+					// the cursor elsewhere, the card ends in a clean edge rather
+					// than in three backticks
+					if (closing && blk.closed && !on(n) && line.to > line.from) b.add(line.from, line.to, Decoration.replace({}));
+					else if (hideIndent) b.add(line.from, line.from + blk.indent.length, Decoration.replace({}));
 				}
+			}
+			// measurements outlive their block when an edit above moves it, and a
+			// stale one would be handed to whatever lands on that line next
+			if (this.measured.size) {
+				const live = new Set(blocks.map((blk) => blk.start));
+				for (const start of this.measured.keys()) if (!live.has(start)) this.measured.delete(start);
 			}
 			return b.finish();
 		}
@@ -1085,14 +1254,50 @@ const codeBlockChrome = ViewPlugin.fromClass(
 	{ decorations: (v) => v.deco }
 );
 
+/** The step above a block, as the two positions worth measuring: where its
+ *  number starts and where its words do. The words' column is the card's own
+ *  left edge, and the number's is the column the block's own number belongs in.
+ *  Null when the line above is not a step at this level. */
+function stepAbove(doc: { lines: number; line(n: number): { from: number; text: string } }, start: number, indent: number): { marker: number; text: number } | null {
+	for (let n = start - 1; n >= 1; n--) {
+		const line = doc.line(n);
+		if (!line.text.trim()) continue;
+		const content = listContentIndent(line.text);
+		if (content.length !== indent) return null; // a different level, or no list at all
+		return { marker: line.from + (/^[ \t]*/.exec(line.text)?.[0].length ?? 0), text: line.from + content.length };
+	}
+	return null;
+}
+
+/** The rendered line holding `pos`, for reading and writing its own geometry. */
+const lineElAt = (view: EditorView, pos: number): HTMLElement | null => {
+	const { node } = view.domAtPos(pos);
+	const el = node.nodeType === 3 ? node.parentElement : (node as HTMLElement);
+	return el?.closest?.(".cm-line") ?? null;
+};
+
+/** The editor's tab width in characters, for measuring an indent in the code
+ *  font it is rendered in. */
+const tabWidth = (view: EditorView): number => Number(getComputedStyle(view.contentDOM).tabSize) || 4;
+
+/** An indent's width in columns, tabs expanded. */
+const indentColumns = (indent: string, tab: number): number => {
+	let n = 0;
+	for (const ch of indent) n = ch === "\t" ? (Math.floor(n / tab) + 1) * tab : n + 1;
+	return n;
+};
+
 /** The text inside the fence that starts at `lineNo`, for the Copy button. */
-function fenceBody(doc: { lines: number; line(n: number): { text: string } }, lineNo: number, fence: string): string {
+function fenceBody(doc: { lines: number; line(n: number): { text: string } }, lineNo: number, fence: string, indent: string): string {
 	const out: string[] = [];
 	const close = new RegExp("^\\s*" + fence[0] + "{" + fence.length + ",}\\s*$");
+	// A block inside a list item carries that item's indent on every line. The
+	// code is what is left after it, and that is what a copy has to hand over:
+	// a paste into a terminal, or into Python or YAML, does not want the list.
 	for (let i = lineNo + 1; i <= doc.lines; i++) {
 		const t = doc.line(i).text;
 		if (close.test(t)) break;
-		out.push(t);
+		out.push(indent && t.startsWith(indent) ? t.slice(indent.length) : t);
 	}
 	return out.join("\n");
 }
@@ -2159,6 +2364,64 @@ export default class PowerEditorPlugin extends Plugin {
 			true
 		);
 
+		// Enter inside a fenced code block: keep the block's left edge, and on a
+		// blank last line, leave the block.
+		//
+		// A block that lives in a list item is indented to that item's content
+		// column, and every line of it has to stay there. One line back at
+		// column 0 ends the list, and the closing fence is then read as the
+		// START of another block, so everything typed after it disappears into
+		// code with no end. Leaving matters for the same reason: inside a fence
+		// Enter can only ever add another line, so a block that ends a note, or
+		// ends a step, has no keyboard way out at all, and one written as the
+		// last thing in a note has nothing below it to click either. The blank
+		// line is spent leaving, which is what makes the gesture Enter twice.
+		this.registerDomEvent(
+			document,
+			"keydown",
+			(e: KeyboardEvent) => {
+				if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				const cm = view ? this.cmOf(view) : null;
+				if (!cm || !cm.hasFocus) return;
+				const sel = cm.state.selection.main;
+				const doc = cm.state.doc;
+				if (!sel.empty) return;
+				const line = doc.lineAt(sel.from);
+				if (FENCE_LINE.test(line.text)) return; // on the fence itself: Obsidian's own Enter
+				if (!insideFence(doc.sliceString(0, line.from))) return;
+				let open = line.number - 1;
+				while (open > 1 && !FENCE_LINE.test(doc.line(open).text)) open--;
+				const after = line.number < doc.lines ? doc.line(line.number + 1) : null;
+				const leaving = !line.text.trim() && after && /^[ \t]*(?:`{3,}|~{3,})[ \t]*$/.test(after.text);
+				const edge = fenceIndent(doc.line(open).text);
+				if (!leaving && !edge) return; // a block at the left margin types as it always has
+				e.preventDefault();
+				e.stopPropagation();
+				if (!leaving) {
+					// the line's own indent, not the fence's: code indented inside
+					// the block keeps that too
+					const indent = /^[ \t]*/.exec(line.text)?.[0] ?? "";
+					cm.dispatch({ changes: { from: sel.from, insert: "\n" + indent }, selection: { anchor: sel.from + 1 + indent.length }, scrollIntoView: true });
+					return;
+				}
+				// inside a list the way on is the next step, so that is what the
+				// line after the block is: marker written, ready to type into
+				const next = nextItemAfterFence((n) => doc.line(n + 1).text, open - 1);
+				const close = doc.line(line.number + 1);
+				const del = line.to - line.from + 1; // the blank line, and the break before it
+				cm.dispatch({
+					changes: [
+						{ from: line.from - 1, to: line.to },
+						{ from: close.to, to: close.to, insert: "\n" + next },
+					],
+					selection: { anchor: close.to - del + 1 + next.length },
+					scrollIntoView: true,
+				});
+			},
+			true
+		);
+
 		this.registerEditorExtension(calloutTokenHider);
 		this.registerEditorExtension(codeBlockChrome);
 		// the "Set language" chip on an unlabelled fence
@@ -2250,7 +2513,7 @@ export default class PowerEditorPlugin extends Plugin {
 				const own = markdownFromMarker(evt.clipboardData?.getData("text/html"));
 				if (own === null) return;
 				evt.preventDefault();
-				editor.replaceSelection(own);
+				this.insertPasted(editor, own);
 			})
 		);
 		// clean-Markdown pasting: strip Word/Outlook/web sludge before it lands
@@ -2261,6 +2524,22 @@ export default class PowerEditorPlugin extends Plugin {
 				if (md === null) return;
 				evt.preventDefault();
 				this.insertPasted(editor, md);
+			})
+		);
+		// Plain text carries no HTML to clean, so it never reaches the cleaner,
+		// but a code block copied from a terminal or from a chat's copy button
+		// still lands wrong inside a list. Only the pastes the plan would
+		// actually move are taken over; a single line never is, which leaves
+		// Obsidian its link-on-selection, its attachments, and its embeds.
+		this.registerEvent(
+			this.app.workspace.on("editor-paste", (evt, editor) => {
+				if (evt.defaultPrevented) return;
+				const text = (evt.clipboardData?.getData("text/plain") ?? "").replace(/\r\n?/g, "\n");
+				if (!text.includes("\n")) return;
+				const planned = this.plannedPaste(editor, text);
+				if (planned === text) return;
+				evt.preventDefault();
+				editor.replaceSelection(planned);
 			})
 		);
 		this.addCommand({
@@ -4476,15 +4755,30 @@ export default class PowerEditorPlugin extends Plugin {
 		menu.showAtPosition(at ?? this.cursorPoint());
 	}
 
+	/** A fence written where the cursor stands leaves its body and its closing
+	 *  fence at column 0, which ends the list the block was meant for: the block
+	 *  renders outside the step, misaligned with the step above it, and the
+	 *  stranded closing fence reads as the START of another block, so everything
+	 *  typed after it disappears into code with no way out. Inside a list every
+	 *  line of the block sits at the item's content column instead, the empty
+	 *  body line included, so the first thing typed lands there too. */
 	private writeCodeBlock(ed: Editor, lang: string) {
+		const from = ed.getCursor("from");
+		const line = ed.getLine(from.line);
+		const indent = listContentIndent(line);
 		const sel = ed.getSelection();
 		if (sel) {
-			ed.replaceSelection("```" + lang + "\n" + sel + "\n```");
+			// the selection is the block's body, so it stays where it was found
+			const at = (l: string) => (!l.trim() || l.startsWith(indent) ? l : indent + l);
+			ed.replaceSelection("```" + lang + "\n" + sel.split("\n").map(at).join("\n") + "\n" + indent + "```");
 			return;
 		}
-		const cur = ed.getCursor();
-		ed.replaceRange("```" + lang + "\n\n```", { line: cur.line, ch: ed.getLine(cur.line).length });
-		ed.setCursor({ line: cur.line + 1, ch: 0 });
+		// A step holding nothing but its marker opens the fence on that line, so
+		// the block sits beside the number the way the step's words would. Words
+		// already on the line keep it and the block starts below them.
+		const head = !line.trim() || (indent && !textBesideMarker(line)) ? "" : "\n";
+		ed.replaceRange(head + (head ? indent : "") + "```" + lang + "\n" + indent + "\n" + indent + "```", { line: from.line, ch: line.length });
+		ed.setCursor({ line: from.line + (head ? 2 : 1), ch: indent.length });
 	}
 
 	/** Change the language on the fence the cursor is inside, so an existing
@@ -4494,7 +4788,7 @@ export default class PowerEditorPlugin extends Plugin {
 		const cur = ed.getCursor().line;
 		let open = -1;
 		for (let i = cur; i >= 0; i--) {
-			if (/^\s*(`{3,}|~{3,})/.test(lines[i])) {
+			if (FENCE_LINE.test(lines[i])) {
 				open = i;
 				break;
 			}
@@ -4513,9 +4807,9 @@ export default class PowerEditorPlugin extends Plugin {
 	pickLanguageForFence(ed: Editor, line: number, anchor?: HTMLElement) {
 		this.closeLangPicker();
 		const lines = ed.getValue().split("\n");
-		const m = /^(\s*)(`{3,}|~{3,})(.*)$/.exec(lines[line] ?? "");
+		const m = FENCE_LINE.exec(lines[line] ?? "");
 		if (!m) return;
-		const current = parseFenceInfo(m[3]).lang;
+		const current = parseFenceInfo(m[4]).lang;
 		const guess = current ? null : guessLanguage(lines.slice(line + 1, line + 6));
 
 		const pop = createDiv({ cls: "ped-langpop" });
@@ -4534,11 +4828,12 @@ export default class PowerEditorPlugin extends Plugin {
 		const apply = (lang: string) => {
 			close();
 			const fresh = ed.getLine(line);
-			const fm = /^(\s*)(`{3,}|~{3,})(.*)$/.exec(fresh);
+			const fm = FENCE_LINE.exec(fresh);
 			if (!fm) return;
-			// keep whatever filename the fence already carries
-			const keep = parseFenceInfo(fm[3]).file;
-			ed.replaceRange(fm[1] + fm[2] + formatFenceInfo(lang, keep), { line, ch: 0 }, { line, ch: fresh.length });
+			// keep whatever filename the fence already carries, and the step's
+			// own marker when the block opens on a list item's line
+			const keep = parseFenceInfo(fm[4]).file;
+			ed.replaceRange(fm[1] + (fm[2] ?? "") + fm[3] + formatFenceInfo(lang, keep), { line, ch: 0 }, { line, ch: fresh.length });
 			ed.focus();
 		};
 
@@ -4594,14 +4889,14 @@ export default class PowerEditorPlugin extends Plugin {
 	 *  and other renderers simply ignore it. */
 	renameCodeBlock(ed: Editor, line: number) {
 		const fresh = ed.getLine(line);
-		const m = /^(\s*)(`{3,}|~{3,})(.*)$/.exec(fresh);
+		const m = FENCE_LINE.exec(fresh);
 		if (!m) return;
-		const { lang, file } = parseFenceInfo(m[3]);
+		const { lang, file } = parseFenceInfo(m[4]);
 		new TextPromptModal(this.app, file ? "Rename this block" : "Name this block", file, (value) => {
 			const cur = ed.getLine(line);
-			const cm = /^(\s*)(`{3,}|~{3,})(.*)$/.exec(cur);
+			const cm = FENCE_LINE.exec(cur);
 			if (!cm) return;
-			ed.replaceRange(cm[1] + cm[2] + formatFenceInfo(lang, value.trim()), { line, ch: 0 }, { line, ch: cur.length });
+			ed.replaceRange(cm[1] + (cm[2] ?? "") + cm[3] + formatFenceInfo(lang, value.trim()), { line, ch: 0 }, { line, ch: cur.length });
 			ed.focus();
 		}).open();
 	}
@@ -4929,12 +5224,23 @@ export default class PowerEditorPlugin extends Plugin {
 		return tabbedTextToMarkdown(text) ?? md;
 	}
 
-	/** Insert pasted Markdown, keeping a table on its own block. Dropping table
-	 *  rows onto the end of a paragraph turns them into literal pipe text. */
-	private insertPasted(ed: Editor, md: string) {
+	/** What a paste should write here. Markdown as it stands, unless the cursor
+	 *  is in a list: a table or a code block dropped in as it stands puts its
+	 *  second line back at column 0, which ends the list and leaves the block
+	 *  outside the step it was meant for. Inside a fenced block a paste is code
+	 *  and is left exactly as it was copied. */
+	private plannedPaste(ed: Editor, md: string): string {
 		const from = ed.getCursor("from");
 		const to = ed.getCursor("to");
-		ed.replaceSelection(padPastedMarkdown(md, ed.getLine(from.line).slice(0, from.ch), ed.getLine(to.line).slice(to.ch)));
+		if (insideFence(ed.getRange({ line: 0, ch: 0 }, from))) return md;
+		return planPastedMarkdown(md, ed.getLine(from.line).slice(0, from.ch), ed.getLine(to.line).slice(to.ch));
+	}
+
+	/** Insert pasted Markdown, keeping a table or a code block on its own block
+	 *  and inside the list item it was dropped into. Dropping table rows onto
+	 *  the end of a paragraph turns them into literal pipe text. */
+	private insertPasted(ed: Editor, md: string) {
+		ed.replaceSelection(this.plannedPaste(ed, md));
 	}
 
 	private async clipboardHtml(): Promise<string | null> {

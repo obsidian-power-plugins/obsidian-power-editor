@@ -1,7 +1,7 @@
 {
 	"id": "powereditor",
 	"name": "Power Editor",
-	"version": "1.52.6",
+	"version": "1.53.6",
 	"minAppVersion": "1.7.2",
 	"description": "Format any note from a toolbar, selection bubble, or slash menu: WYSIWYG editing, block drag handles, image resizing, dictation, and AI edits, all staying plain Markdown.",
 	"author": "Power Plugins",

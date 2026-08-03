@@ -1,6 +1,8 @@
 /* Pure formatting helpers behind the toolbar: heading levels, list detection
  * for active states, and clear-formatting. Covered by tests.ts. */
 
+import { FENCE_LINE } from "./clean";
+
 export function headingLevel(line: string): number {
 	const m = line.match(/^(#{1,6})\s/);
 	return m ? m[1].length : 0;
@@ -402,7 +404,7 @@ export function sweepHighlights(text: string, background: string | null): { text
 		return out;
 	};
 	const lines = text.split("\n").map((line) => {
-		if (/^\s*(```|~~~)/.test(line)) {
+		if (FENCE_LINE.test(line)) {
 			inFence = !inFence;
 			return line;
 		}
@@ -451,7 +453,7 @@ export function cleanCopyText(md: string, mode: "clean" | "plain"): string {
 	return unwrapped
 		.split("\n")
 		.map((line) => {
-			if (/^\s*(```|~~~)/.test(line)) {
+			if (FENCE_LINE.test(line)) {
 				inFence = !inFence;
 				return line;
 			}
@@ -502,7 +504,7 @@ export function convertEmphasisInWrappers(text: string): { text: string; count: 
 		return c;
 	};
 	const lines = text.split("\n").map((line) => {
-		if (/^\s*(```|~~~)/.test(line)) {
+		if (FENCE_LINE.test(line)) {
 			inFence = !inFence;
 			return line;
 		}

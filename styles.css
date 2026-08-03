@@ -1842,11 +1842,15 @@ body.is-mobile .ped-columns {
    and nothing is written into the note. */
 
 .markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock {
+	--ped-cb-x: 0px;
 	background: var(--code-background, var(--background-secondary));
 	border-inline: 1px solid var(--background-modifier-border);
 	padding-inline: var(--size-4-4);
 	font-size: 0.9em;
 }
+
+/* The inset itself is at the end of this file: a code theme paints the line
+   directly, and for a block inside a list step the line must paint nothing. */
 
 .markdown-source-view.mod-cm6 .cm-line.HyperMD-codeblock-begin {
 	border-top: 1px solid var(--background-modifier-border);
@@ -2415,13 +2419,16 @@ body.ped-cbt .markdown-rendered pre code {
    partway down a long block and number it wrongly. */
 
 body.ped-cb-nums .markdown-source-view.mod-cm6 .cm-line.ped-cb-body {
-	padding-inline-start: calc(var(--size-4-4) + 2.6em);
+	/* the room the number needs is published as well as used, so the inset
+	   rules at the end of this file can leave it alone and still allow for it */
+	--ped-cb-gutter: 2.6em;
+	padding-inline-start: calc(var(--ped-cb-x) + var(--size-4-4) + 2.6em);
 }
 
 body.ped-cb-nums .markdown-source-view.mod-cm6 .cm-line.ped-cb-body::before {
 	content: attr(data-ped-ln);
 	position: absolute;
-	left: 0;
+	left: var(--ped-cb-x);
 	width: 2.4em;
 	padding-inline-end: 0.7em;
 	text-align: right;
@@ -2434,7 +2441,7 @@ body.ped-cb-nums .markdown-source-view.mod-cm6 .cm-line.ped-cb-body::before {
 /* the rule between gutter and code, matched to the block's own border */
 body.ped-cb-nums .markdown-source-view.mod-cm6 .cm-line.ped-cb-body {
 	position: relative;
-	background-image: linear-gradient(to right, transparent calc(var(--size-4-4) + 1.9em), var(--pedc-border, var(--background-modifier-border)) calc(var(--size-4-4) + 1.9em), var(--pedc-border, var(--background-modifier-border)) calc(var(--size-4-4) + 1.9em + 1px), transparent calc(var(--size-4-4) + 1.9em + 1px));
+	background-image: linear-gradient(to right, transparent calc(var(--ped-cb-x) + var(--size-4-4) + 1.9em), var(--pedc-border, var(--background-modifier-border)) calc(var(--ped-cb-x) + var(--size-4-4) + 1.9em), var(--pedc-border, var(--background-modifier-border)) calc(var(--ped-cb-x) + var(--size-4-4) + 1.9em + 1px), transparent calc(var(--ped-cb-x) + var(--size-4-4) + 1.9em + 1px));
 }
 
 /* dark themes need a dimmer gutter than their body text */
@@ -2445,7 +2452,10 @@ body.ped-cb-dark .markdown-source-view.mod-cm6 .cm-line.ped-cb-body::before {
 /* the filename at the left of a code block header, Claude-style */
 .ped-cb-file {
 	position: absolute;
-	left: var(--size-4-4);
+	/* inside the card, level with the code: on a block that sits in a list step
+	   the line begins at that step's number, and the note's margin is no longer
+	   where the card is */
+	left: calc(var(--ped-cb-x, 0px) + var(--size-4-4));
 	top: 3px;
 	height: 21px;
 	display: inline-flex;
@@ -2648,5 +2658,76 @@ body.ped-no-guides .markdown-rendered.show-indentation-guide li > ol::before {
 .ped-floating {
 	position: fixed;
 	margin: 0;
+}
+
+/* ---------- a code block inside a list step ----------
+   The block belongs to the step it was written in, so the card is drawn from
+   that step's own text column across instead of from the note's margin: the
+   step's number stays outside it, beside the code, where the list put it. The
+   line itself keeps its full width, since that is what CodeMirror measures and
+   wraps against; only the paint moves.
+
+   This is last in the file on purpose. A code theme paints the line itself, at
+   a specificity these rules can only match, and here the line has to paint
+   nothing at all: the card is the ::after, and it starts at the inset. */
+
+body .markdown-source-view.mod-cm6 .cm-line.ped-cb-in.HyperMD-codeblock,
+body .markdown-source-view.mod-cm6 .cm-line.ped-cb-in.HyperMD-codeblock.cm-active {
+	position: relative;
+	background: none;
+	/* the card's own edges are on the ::after; the line's would run the full
+	   width of the note, straight through the step's number */
+	border: none;
+}
+
+/* The inset is a width in code characters, which is exactly what the indent is
+   made of, so the ::after is pinned to the code font whatever its line uses. */
+body .markdown-source-view.mod-cm6 .cm-line.ped-cb-in.HyperMD-codeblock::after {
+	content: "";
+	position: absolute;
+	z-index: -1;
+	inset: 0 0 0 var(--ped-cb-x);
+	font-family: var(--font-monospace);
+	font-size: 0.9em;
+	background: var(--pedc-bg, var(--code-background, var(--background-secondary)));
+	border-inline: 1px solid var(--pedc-border, var(--background-modifier-border));
+	pointer-events: none;
+}
+
+body .markdown-source-view.mod-cm6 .cm-line.ped-cb-in.HyperMD-codeblock-begin::after {
+	border-top: 1px solid var(--pedc-border, var(--background-modifier-border));
+	border-radius: 8px 8px 0 0;
+}
+
+body .markdown-source-view.mod-cm6 .cm-line.ped-cb-in.HyperMD-codeblock-end::after {
+	border-bottom: 1px solid var(--pedc-border, var(--background-modifier-border));
+	border-radius: 0 0 8px 8px;
+}
+
+/* The code sits inside the card, past the indent that put it there. A fence on
+   a line of its own is set the same way: nothing but indent stands in front of
+   it, so it belongs with the code rather than with the step's number. */
+body .markdown-source-view.mod-cm6 .cm-line.ped-cb-in.HyperMD-codeblock:not(.ped-cb-step) {
+	padding-inline-start: calc(var(--ped-cb-x) + var(--size-4-4) + var(--ped-cb-gutter, 0px));
+}
+
+/* A fence that opens on the step's own line carries that step's number, which
+   is list text and not code: left in the code font it sits off the numbers
+   above and below it, since an indent is measured in the font it is drawn in.
+   The pull that puts it back in their column is measured from the step above
+   rather than calculated, and is 0 until that measurement lands. The line
+   cannot simply be pushed in, or the number would go in with it, so the card's
+   padding is a widget standing after the number instead. */
+body .markdown-source-view.mod-cm6 .cm-line.ped-cb-in.ped-cb-step {
+	padding-inline-start: 0;
+	text-indent: calc(-1 * var(--ped-cb-pull, 0px));
+	font-family: var(--font-text);
+	font-size: 1em;
+	color: var(--text-normal);
+}
+
+.ped-cb-pad {
+	display: inline-block;
+	width: var(--size-4-4);
 }
 

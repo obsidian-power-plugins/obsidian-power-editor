@@ -3,13 +3,17 @@
  * what the document looks like after moving one. No Obsidian imports: all of
  * this is covered by tests.ts. */
 
+import { FENCE_LINE } from "./clean";
+
 export interface BlockRange {
 	from: number;
 	to: number; // inclusive line indexes
 }
 
 const isBlank = (l: string) => !l.trim();
-const isFenceMark = (l: string) => /^\s*(```|~~~)/.test(l);
+// a fence can open on a list item's own line, and the whole block travels with
+// that step, so the marker in front of one is part of the fence line
+const isFenceMark = (l: string) => FENCE_LINE.test(l);
 const isHeading = (l: string) => /^#{1,6}\s/.test(l);
 const isTableLine = (l: string) => /^\s*\|/.test(l);
 const isQuoteLine = (l: string) => /^\s*>/.test(l);
@@ -373,9 +377,9 @@ export function findCalloutLeads(lines: string[]): CalloutLead[] {
 	// frontmatter is data, never prose
 	for (let i = frontmatterEnd(lines); i < lines.length; i++) {
 		const text = lines[i];
-		const f = /^\s*(```|~~~)/.exec(text);
+		const f = FENCE_LINE.exec(text);
 		if (f) {
-			if (!fence) fence = f[1];
+			if (!fence) fence = f[3];
 			else if (text.trim().startsWith(fence)) fence = null;
 			continue;
 		}

@@ -1,6 +1,6 @@
 {
 	"name": "powereditor",
-	"version": "1.52.6",
+	"version": "1.53.6",
 	"description": "Obsidian plugin: format any note from a toolbar, selection bubble, or slash menu, with everything staying plain Markdown",
 	"main": "main.js",
 	"type": "module",

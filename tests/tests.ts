@@ -51,7 +51,7 @@ import {
 	setPriority,
 	toggleTodo,
 } from "../src/tasks";
-import { cleanPastedHtml, escapePlaceholderTags, findPlaceholderTags, isOneMarkdownTable, looksLikeMarkdownTable, padPastedMarkdown, preCleanHtml, postCleanMarkdown, tableToMarkdown, tabbedTextToMarkdown } from "../src/clean";
+import { cleanPastedHtml, escapePlaceholderTags, FENCE_LINE, fenceIndent, findPlaceholderTags, insideFence, isOneMarkdownTable, listContentIndent, looksLikeMarkdownTable, nextItemAfterFence, padPastedMarkdown, planPastedMarkdown, preCleanHtml, postCleanMarkdown, tableToMarkdown, tabbedTextToMarkdown } from "../src/clean";
 import { buildMultipart, planDictationInsert } from "../src/dictate";
 import {
 	alignOf,
@@ -729,6 +729,65 @@ ok(!looksLikeMarkdownTable("a sentence with | a pipe\nand a --- rule"), "prose w
 eq(padPastedMarkdown("| a |\n| --- |", "Grok Paste:", ""), "\n\n| a |\n| --- |", "a table pasted onto a line of prose gets its own block");
 eq(padPastedMarkdown("| a |\n| --- |", "", "trailing words"), "| a |\n| --- |\n\n", "text after the cursor is pushed clear of the table");
 eq(padPastedMarkdown("plain words", "Grok Paste:", "more"), "plain words", "a non-table paste is inserted exactly as before");
+eq(padPastedMarkdown("```ps\nx\n```", "Run this:", ""), "\n```ps\nx\n```", "a code block pasted onto a line of prose takes the next line");
+eq(padPastedMarkdown("```ps\nx\n```", "", "trailing words"), "```ps\nx\n```\n", "text after the cursor is pushed clear of the closing fence");
+eq(padPastedMarkdown("| a |\n| --- |", "5. ", ""), "\n| a |\n| --- |", "an empty item keeps its marker and takes the table on the next line");
+
+// --- a block in a list: inserted as it stands, its second line lands back at
+// column 0, which ends the list and drags the block out of the item. The step
+// keeps its number either way and the block goes underneath it ---
+// (the sub-items read as a. and b. on screen; the source markers are numbers)
+eq(
+	planPastedMarkdown("```powershell\nGet-Service TSGateway\n```", "\t2. ", ""),
+	"```powershell\n\t   Get-Service TSGateway\n\t   ```",
+	"a code block pasted on an empty step opens on that step's own line, its body at the step's column"
+);
+eq(
+	planPastedMarkdown("```powershell\nGet-Service TSGateway\n```", "\t1. Paste this in", ""),
+	"\n\t   ```powershell\n\t   Get-Service TSGateway\n\t   ```",
+	"a code block pasted at the end of a step sits below its words at the same column"
+);
+eq(
+	planPastedMarkdown("| a |\n| --- |", "\t2. ", ""),
+	"\n\t   | a |\n\t   | --- |",
+	"a table on an empty item needs only the one break; the marker line is already blank"
+);
+eq(
+	planPastedMarkdown("| a |\n| --- |", "\t1. The table", ""),
+	"\n\n\t   | a |\n\t   | --- |",
+	"a table after a step's words still gets the blank line its rows need"
+);
+eq(planPastedMarkdown("```ps\nx\n```", "- ", ""), "```ps\n  x\n  ```", "a bulleted item keeps its bullet too");
+eq(planPastedMarkdown("line one\nline two", "- ", ""), "line one\n  line two", "pasted prose is the new item's words, not a block below it");
+eq(planPastedMarkdown("```ps\na\n\nb\n```", "2. ", ""), "```ps\n   a\n\n   b\n   ```", "a blank line inside the paste stays blank rather than collecting indent");
+eq(planPastedMarkdown("one line", "- ", ""), "one line", "a one-line paste is inserted exactly as before");
+eq(planPastedMarkdown("a\nb", "Not a list", ""), "a\nb", "outside a list nothing is indented");
+// --- where the toolbar's own code block belongs, read the same way ---
+eq(listContentIndent("\t2. "), "\t   ", "an item's content column is its indent plus its marker");
+eq(listContentIndent("\t1. I need to paste a script"), "\t   ", "words on the item make no difference to the column");
+eq(listContentIndent("- [ ] a task"), "      ", "a checkbox counts as part of the marker");
+eq(listContentIndent("Just a paragraph"), "", "outside a list a block sits where it stands");
+// --- a fence can open on a step's own line, so the block sits beside its number ---
+eq(fenceIndent("\t2. ```powershell"), "\t   ", "the body of a block opened on a step's line sits at the step's column");
+eq(fenceIndent("   ```js"), "   ", "a block with no step keeps its own indent");
+eq(fenceIndent("- [ ] ```js"), "      ", "a task's checkbox counts as part of its marker here too");
+eq(fenceIndent("just a line"), "", "a line that opens nothing has no indent to give");
+ok(FENCE_LINE.test("\t2. ```powershell"), "a fence after a list marker is a fence");
+ok(!FENCE_LINE.test("- ```js``` means JavaScript"), "a bullet whose words start with code is a sentence, not a block");
+ok(FENCE_LINE.test("````js"), "a longer fence is still a fence");
+ok(insideFence("- ```js\nconst x = 1\n"), "a line under a fence opened on a bullet is inside it");
+// --- and the way out of the block, which is the next step of that list ---
+const STEPS = L("3. Open PowerShell as Admin.\n\t1. Testing\n\t   ```powershell\n\t   Get-ChildItem\n\t   ```");
+eq(nextItemAfterFence((n) => STEPS[n], 2), "\t2. ", "leaving the block writes the next step, numbered on");
+const OWN = L("3. Open PowerShell as Admin.\n\t1. Testing\n\t2. ```powershell\n\t   Get-ChildItem\n\t   ```");
+eq(nextItemAfterFence((n) => OWN[n], 2), "\t3. ", "a block that opens on its own step counts from that step, not the one above");
+eq(nextItemAfterFence((n) => L("- one\n  ```js")[n], 1), "- ", "a bulleted list repeats its bullet");
+eq(nextItemAfterFence((n) => L("- [x] done\n      ```js")[n], 1), "- [ ] ", "the next task starts unticked");
+eq(nextItemAfterFence((n) => L("# Head\n\n```js")[n], 2), "", "a fence at the left margin has no list around it");
+eq(nextItemAfterFence((n) => L("- item\n```js")[n], 1), "", "a fence at the margin below a list is not inside the item");
+ok(insideFence("# Note\n\n```yaml\n- name: x\n"), "a line under an open fence is inside it");
+ok(!insideFence("# Note\n\n```yaml\n- name: x\n```\n\n- a real item\n"), "a closed fence is behind us");
+ok(!insideFence("# Note\n\n- a real item\n"), "a note with no fence is never inside one");
 eq(postCleanMarkdown("a  \n\n\n\nb c  "), "a\n\nb c", "markdown post-clean tidies blanks and nbsp");
 
 // --- placeholder tags: <AppFeature> reads as an unclosed HTML tag, and from

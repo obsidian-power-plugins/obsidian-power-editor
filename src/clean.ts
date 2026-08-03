@@ -222,12 +222,122 @@ export function isOneMarkdownTable(md: string): boolean {
 	return lines.length > 1 && lines.every((l) => /^[ \t]*\|/.test(l)) && lines.filter(looksLikeMarkdownTable).length === 1 && looksLikeMarkdownTable(lines[1]);
 }
 
-/** Markdown pasted mid-line needs a blank line around it, or the table rows
- *  read as more words in the paragraph they landed in. */
+/* ---------------- where a paste lands ---------------- */
+
+/** A list item's opening: its indent, then the marker and the spaces after it,
+ *  with a task checkbox counted as part of the marker. */
+const LIST_ITEM = /^([ \t]*)((?:[-*+]|\d+[.)])[ \t]+(?:\[.\][ \t]+)?)/;
+
+/** A fenced block's opening line: the indent, an optional list marker, the
+ *  backticks, then the info string. The marker is part of it because a step
+ *  whose content is code opens its fence on the marker's own line, so the block
+ *  sits beside the number the way the step's words would. A backtick fence's
+ *  info string may hold no backticks of its own, which is what keeps a bullet
+ *  reading like "- ```js``` means JavaScript" a sentence and not a block. */
+export const FENCE_LINE = /^([ \t]*)((?:[-*+]|\d+[.)])[ \t]+(?:\[.\][ \t]+)?)?(`{3,}(?!.*`)|~{3,})(.*)$/;
+
+/** The whitespace every line of a fenced block sits at, given its opening line:
+ *  past the list marker when there is one, so the body lines up with the step's
+ *  words rather than with its number. */
+export const fenceIndent = (openLine: string): string => {
+	const m = FENCE_LINE.exec(openLine);
+	return m ? m[1] + " ".repeat(m[2]?.length ?? 0) : "";
+};
+
+const opensTable = (md: string) => /^[ \t]*\|/.test(md);
+const closesTable = (md: string) => /\|[ \t]*$/.test(md);
+const opensFence = (md: string) => /^[ \t]*(?:```|~~~)/.test(md);
+const closesFence = (md: string) => /(?:```|~~~)[ \t]*$/.test(md);
+
+/** What a line says once its list marker is discounted. An item holding nothing
+ *  but its marker says nothing, which is what tells an empty step apart from a
+ *  step whose words a block has to clear. */
+export const textBesideMarker = (line: string) => line.replace(LIST_ITEM, "").trim();
+
+/** The column an item's own content starts at, as the whitespace that puts a
+ *  following line there. Only the marker widens into spaces; the indent is
+ *  copied as it stands, so a vault that indents with tabs stays tabbed. */
+const contentIndent = (item: RegExpExecArray) => item[1] + " ".repeat(item[2].length);
+
+/** The whitespace that puts a line at the content column of the list item this
+ *  line starts, or "" when it is not a list item. Every line of a block written
+ *  inside an item sits here: written where the cursor stands, the block's second
+ *  line goes back to column 0, which ends the list and leaves the block outside
+ *  the step it was meant for, its closing fence reading as the start of another
+ *  block rather than the end of this one. */
+export function listContentIndent(line: string): string {
+	const m = LIST_ITEM.exec(line);
+	return m ? contentIndent(m) : "";
+}
+
+/** The break between whatever the cursor's line already holds and a block
+ *  landing on it. A table wants a blank line, since its rows only read as a
+ *  table at the start of a block; a fence only wants the line to itself. Inside
+ *  a list the marker keeps its line either way, so the step stays numbered and
+ *  the block sits under it: a step whose whole content is code still reads as a
+ *  step, and the number is the thing the reader is following. */
+function blockHead(md: string, before: string): string {
+	if (!opensTable(md) && !opensFence(md)) return "";
+	// an empty step: a fence opens on the marker's own line, so the block sits
+	// beside the number; a table's rows have to start a line of their own
+	if (!textBesideMarker(before)) return LIST_ITEM.test(before) && opensTable(md) ? "\n" : "";
+	return opensTable(md) ? "\n\n" : "\n";
+}
+
+/** Markdown pasted mid-line needs a break around it, or the table rows read as
+ *  more words in the paragraph they landed in and the text either side of a
+ *  fence swallows the fence. */
 export function padPastedMarkdown(md: string, before: string, after: string): string {
-	const opensTable = /^[ \t]*\|/.test(md);
-	const closesTable = /\|[ \t]*$/.test(md);
-	return `${opensTable && before.trim() ? "\n\n" : ""}${md}${closesTable && after.trim() ? "\n\n" : ""}`;
+	const tail = closesTable(md) ? "\n\n" : closesFence(md) ? "\n" : "";
+	return `${blockHead(md, before)}${md}${after.trim() ? tail : ""}`;
+}
+
+/** The next item of the list a fenced block sits in, indent and marker, ready
+ *  to type into: what a line written after the block should be. Walks up from
+ *  the opening fence, so a line inside the code that reads like a list item
+ *  ("- name: x" in YAML) is never mistaken for the step. "" when the block is
+ *  not in a list, where a plain new line is all there is to write. */
+export function nextItemAfterFence(lineAt: (n: number) => string, openLine: number): string {
+	// the fence may open on the step's own line, and then that step is the one
+	const own = FENCE_LINE.exec(lineAt(openLine));
+	if (own?.[2]) return own[1] + nextMarker(own[2]);
+	const fence = /^[ \t]*/.exec(lineAt(openLine))?.[0] ?? "";
+	for (let n = openLine - 1; n >= 0; n--) {
+		const text = lineAt(n);
+		if (!text.trim()) continue;
+		const m = LIST_ITEM.exec(text);
+		if (m) return contentIndent(m).length <= fence.length ? m[1] + nextMarker(m[2]) : "";
+		if (!/^[ \t]/.test(text)) return ""; // a line at the left margin: no list around this
+	}
+	return "";
+}
+
+/** The marker after this one: numbers count on, bullets repeat, and a ticked
+ *  task starts the next one unticked. */
+const nextMarker = (marker: string) => marker.replace(/^\d+/, (n) => String(Number(n) + 1)).replace(/\[.\]/, "[ ]");
+
+/** True when the cursor sits inside a fenced code block, given everything above
+ *  it. A paste there is code, and code lands exactly as it was copied: a line
+ *  that reads like a list item ("- name: x" in YAML) is not one. Counted from
+ *  the top of the note, which is the only place a fence's state can be read. */
+export function insideFence(textAbove: string): boolean {
+	let fenced = false;
+	for (const line of textAbove.split("\n")) if (FENCE_LINE.test(line)) fenced = !fenced;
+	return fenced;
+}
+
+/** What a paste should insert: the Markdown, broken clear of whatever it landed
+ *  on, and held inside the list item it landed in. The first line is left where
+ *  it is, since it either continues the line already there or is the break that
+ *  puts the block below it. */
+export function planPastedMarkdown(md: string, before: string, after: string): string {
+	const padded = padPastedMarkdown(md, before, after);
+	const indent = listContentIndent(before);
+	if (!indent || !padded.includes("\n")) return padded;
+	return padded
+		.split("\n")
+		.map((line, i) => (!i || !line.trim() ? line : indent + line))
+		.join("\n");
 }
 
 /* ---------------- placeholder tags ---------------- */
@@ -258,7 +368,7 @@ function outsideCode(md: string, fn: (s: string, lineNo: number) => string): str
 	return md
 		.split("\n")
 		.map((line, i) => {
-			if (/^\s*(?:```|~~~)/.test(line)) {
+			if (FENCE_LINE.test(line)) {
 				fenced = !fenced;
 				return line;
 			}
