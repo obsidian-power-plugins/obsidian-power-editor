@@ -453,6 +453,73 @@ function liveTaskCheckbox(plugin: PowerEditorPlugin) {
 	);
 }
 
+/**
+ * Line classes the stylesheet needs but plain CSS cannot ask for.
+ *
+ * Three questions: is this line blank, does a table start on the next one, and
+ * is this an ordered-list line. The stylesheet used to ask all three with
+ * `:has()`, which the plugin directory flags: matching a parent by what is
+ * inside it (or by what follows it) makes the browser re-check the parent
+ * whenever anything in that subtree changes, and in an editor that is on every
+ * keystroke. Answering here costs one pass over the visible lines per update.
+ *
+ * "Blank" is exactly an empty line, which is what renders as a lone `<br>`, and
+ * what the old `:has(> br:only-child)` was testing for.
+ */
+function lineMarkers() {
+	/** A table starts on this line when it is a row and the next line is the
+	 *  delimiter. Same test as the paste path, so the two cannot disagree. */
+	const startsTable = (doc: EditorState["doc"], lineNo: number): boolean => {
+		if (lineNo > doc.lines || lineNo + 1 > doc.lines) return false;
+		if (!/^[ \t]*\|/.test(doc.line(lineNo).text)) return false;
+		return looksLikeMarkdownTable(doc.line(lineNo + 1).text);
+	};
+
+	const indentOf = (text: string) => /^[ \t]*/.exec(text)![0].length;
+
+	/** A list line Obsidian will hang a fold arrow on, which is any whose next
+	 *  non-empty line is indented further: a nested item, or the item's own
+	 *  continuation. The arrow replaces the bullet, which is what the stylesheet
+	 *  needs to know. */
+	const foldableItem = (doc: EditorState["doc"], lineNo: number): boolean => {
+		if (lineNo + 1 > doc.lines) return false;
+		const next = doc.line(lineNo + 1).text;
+		if (next.trim() === "") return false;
+		return indentOf(next) > indentOf(doc.line(lineNo).text);
+	};
+
+	return ViewPlugin.fromClass(
+		class {
+			decorations: DecorationSet;
+			constructor(view: EditorView) {
+				this.decorations = this.build(view);
+			}
+			update(u: ViewUpdate) {
+				if (u.docChanged || u.viewportChanged) this.decorations = this.build(u.view);
+			}
+			build(view: EditorView): DecorationSet {
+				const b = new RangeSetBuilder<Decoration>();
+				const doc = view.state.doc;
+				for (const range of view.visibleRanges) {
+					let pos = range.from;
+					while (pos <= range.to) {
+						const line = doc.lineAt(pos);
+						const cls: string[] = [];
+						if (line.text.length === 0) cls.push("ped-blank");
+						if (startsTable(doc, line.number + 1)) cls.push("ped-pre-table");
+						if (/^[ \t]*\d+[.)][ \t]/.test(line.text)) cls.push("ped-ol");
+						if (/^[ \t]*(?:[-*+]|\d+[.)])[ \t]/.test(line.text) && foldableItem(doc, line.number)) cls.push("ped-foldable");
+						if (cls.length) b.add(line.from, line.from, Decoration.line({ attributes: { class: cls.join(" ") } }));
+						pos = line.to + 1;
+					}
+				}
+				return b.finish();
+			}
+		},
+		{ decorations: (v) => v.decorations }
+	);
+}
+
 /** Inline comments: each %%💬 …%% marker renders as a small chip; the cursor
  *  entering the marker reveals the plain source. Clicking the chip opens the
  *  read/edit/resolve popover. Reading view never shows the marker at all
@@ -2595,6 +2662,7 @@ export default class PowerEditorPlugin extends Plugin {
 		this.registerEditorExtension(calloutTokenHider);
 		this.registerEditorExtension(listTables(this));
 		this.registerEditorExtension(codeBlockChrome);
+		this.registerEditorExtension(lineMarkers());
 		// the "Set language" chip on an unlabelled fence
 		this.registerDomEvent(document, "click", (e) => {
 			const btn = (e.target as HTMLElement | null)?.closest?.(".ped-cb-lang") as HTMLElement | null;
@@ -2754,6 +2822,16 @@ export default class PowerEditorPlugin extends Plugin {
 		this.applyOutlineCss();
 		// Reading view: apply alignment markers there too (comments survive into
 		// the rendered DOM as comment nodes; find them and style their block)
+		// Reading view's half of the fold-arrow question. Obsidian hangs a
+		// .list-collapse-indicator on an item that has a nested list, and the
+		// arrow stands in for the bullet. The stylesheet used to ask with
+		// :has(); the item says so itself now.
+		this.registerMarkdownPostProcessor((el) => {
+			for (const li of Array.from(el.querySelectorAll("li"))) {
+				li.toggleClass("ped-foldable", li.querySelector(":scope > ul, :scope > ol") !== null);
+			}
+		});
+
 		this.registerMarkdownPostProcessor((el) => {
 			const walker = document.createTreeWalker(el, NodeFilter.SHOW_COMMENT);
 			let node: Node | null;

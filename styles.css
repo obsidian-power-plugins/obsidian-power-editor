@@ -497,24 +497,25 @@ body.ped-lh-relaxed .markdown-preview-view {
    font-size will not do it because the inherited line-height is a fixed
    length. Setting line-height on the line itself does.
 
-   An empty line is exactly "<br>", which is how :has() finds it, and the
-   same test Obsidian's own stylesheet uses. Type on the line and the br
-   is gone, the rule stops matching, and the line returns to full height
-   by itself. Verified against the live DOM: a table widget is a direct
-   child of .cm-content carrying both cm-embed-block and cm-table-widget,
-   with a blank .cm-line on each side. */
+   An empty line is exactly "<br>". The editor extension marks those lines
+   .ped-blank, and marks a line the next of which opens a table
+   .ped-pre-table, so this stylesheet needs no parent-matching selector to
+   find either. Type on the line and the class is gone on the next update,
+   and the line returns to full height by itself. Verified against the live
+   DOM: a table widget is a direct child of .cm-content carrying both
+   cm-embed-block and cm-table-widget, with a blank .cm-line on each side. */
 
 /* Headings and tables are separate settings, so they carry separate
    classes and variables: turning one off leaves the other alone. */
 
-body.ped-heading-gap .markdown-source-view.mod-cm6.is-live-preview .cm-line.HyperMD-header + .cm-line:has(> br:only-child) {
+body.ped-heading-gap .markdown-source-view.mod-cm6.is-live-preview .cm-line.HyperMD-header + .cm-line.ped-blank {
 	line-height: var(--ped-heading-gap, 12px);
 }
 
 /* A table has a blank line on BOTH sides and Markdown needs both, so the
    one before it gets the same treatment as the one after. */
-body.ped-table-gap .markdown-source-view.mod-cm6.is-live-preview .cm-table-widget + .cm-line:has(> br:only-child),
-body.ped-table-gap .markdown-source-view.mod-cm6.is-live-preview .cm-line:has(> br:only-child):has(+ .cm-table-widget) {
+body.ped-table-gap .markdown-source-view.mod-cm6.is-live-preview .cm-table-widget + .cm-line.ped-blank,
+body.ped-table-gap .markdown-source-view.mod-cm6.is-live-preview .cm-line.ped-blank.ped-pre-table {
 	line-height: var(--ped-table-gap, 12px);
 }
 
@@ -530,7 +531,7 @@ body.ped-table-gap .markdown-source-view.mod-cm6 .cm-table-widget {
    wins, so every heading sits the same distance from what it introduces
    whether that is a paragraph, a list, or a table. Scoped to both classes
    because with headings off the table setting should still apply here. */
-body.ped-heading-gap.ped-table-gap .markdown-source-view.mod-cm6.is-live-preview .cm-line.HyperMD-header + .cm-line:has(> br:only-child):has(+ .cm-table-widget) {
+body.ped-heading-gap.ped-table-gap .markdown-source-view.mod-cm6.is-live-preview .cm-line.HyperMD-header + .cm-line.ped-blank.ped-pre-table {
 	line-height: var(--ped-heading-gap, 12px);
 }
 
@@ -860,7 +861,7 @@ input.ped-prompt-input {
 	opacity: 1;
 }
 
-.markdown-source-view .HyperMD-list-line:has(.list-collapse-indicator) .list-bullet::after {
+.markdown-source-view .HyperMD-list-line.ped-foldable .list-bullet::after {
 	display: none;
 }
 
@@ -868,7 +869,7 @@ input.ped-prompt-input {
 	opacity: 1;
 }
 
-.markdown-rendered li:has(> .list-collapse-indicator)::marker {
+.markdown-rendered li.ped-foldable::marker {
 	content: "";
 }
 
@@ -2566,8 +2567,8 @@ body.theme-light .notice:not(.pw-self-styled) a {
    line has its own brighter color on .cm-active-indent, so that needs saying
    too or the guide comes back wherever the cursor is. */
 
-body.ped-no-ol-guides .markdown-source-view.mod-cm6 .HyperMD-list-line:has(.cm-formatting-list-ol) .cm-indent::before,
-body.ped-no-ol-guides .markdown-source-view.mod-cm6 .HyperMD-list-line:has(.cm-formatting-list-ol) .cm-active-indent::before {
+body.ped-no-ol-guides .markdown-source-view.mod-cm6 .HyperMD-list-line.ped-ol .cm-indent::before,
+body.ped-no-ol-guides .markdown-source-view.mod-cm6 .HyperMD-list-line.ped-ol .cm-active-indent::before {
 	border-inline-end-color: transparent;
 }
 
