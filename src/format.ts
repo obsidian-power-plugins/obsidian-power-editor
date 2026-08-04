@@ -163,8 +163,10 @@ export function linkAt(line: string, ch: number): LinkInfo | null {
 	}
 	// bare URLs count too (pasted links have no [text](…) wrapper); trailing
 	// sentence punctuation stays outside, and <angle autolinks> swallow their
-	// brackets so an edit replaces the whole autolink
-	const bare = /https?:\/\/[^\s<>]+/g;
+	// brackets so an edit replaces the whole autolink. A scheme-less "www."
+	// renders as a link the same as an "https://" one, and has to start a word
+	// so that a word merely ending in those letters is not mistaken for one
+	const bare = /(?:https?:\/\/|\bwww\.)[^\s<>]+/g;
 	while ((m = bare.exec(line))) {
 		const url = m[0].replace(/[)\]}>.,;:!?"']+$/, "");
 		let start = m.index;

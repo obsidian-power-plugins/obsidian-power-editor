@@ -636,6 +636,15 @@ eq(
 	"angle-bracket autolinks include their brackets in the range"
 );
 eq(linkAt("[t](https://x.com)", 8)?.text, "t", "a markdown link still wins over its own URL");
+// Obsidian renders a scheme-less www URL as a link, so a dialog that cannot
+// find one is refusing to edit something the reader can plainly click
+eq(
+	linkAt("see www.irely.com now", 8),
+	{ start: 4, end: 17, text: "", url: "www.irely.com", wiki: false },
+	"a www URL with no scheme is a link too"
+);
+eq(linkAt("that is www.x", 10), { start: 8, end: 13, text: "", url: "www.x", wiki: false }, "and it does not need a path");
+ok(linkAt("nowww.x here", 3) === null, "www has to start the word, not sit inside one");
 
 // --- alignment markers ---
 eq(setAlign("hello", "center"), "hello<!--al:center-->", "center adds a marker");
