@@ -449,7 +449,8 @@ html body.ped-imgresizing.ped-imgresizing.ped-imgresizing * {
    an inner .image-wrapper), so the cap has to lift on the box when it
    carries the width attribute; the bare img rules cover chains without
    such a box. These base rules grow one side's worth, left aligned, so
-   engines without modern attr() can never grow a sideways scrollbar. */
+   engines that never got the width published to them can never grow a
+   sideways scrollbar. */
 .markdown-source-view.mod-cm6 .image-embed[width],
 .markdown-preview-view .image-embed[width] {
 	width: max-content;
@@ -461,26 +462,31 @@ html body.ped-imgresizing.ped-imgresizing.ped-imgresizing * {
 	max-width: calc(100% + var(--ped-img-bleed, 0px));
 }
 
-/* Where attr() works in calc (Chromium 133+, which desktop Obsidian has),
-   grow up to both sides' room and center the overflow, so a wide image
-   bleeds evenly past the column. min() keeps anything narrower than the
+/* Once the plugin has published the image's own width as --ped-img-w and
+   marked it, grow up to both sides' room and center the overflow, so a wide
+   image bleeds evenly past the column. min() keeps anything narrower than the
    column exactly where it is today (so text-align from the align tools
    still places it; alignment is inert for overflow-wide inline content,
    the browser start-aligns it, so the margin never fights it), and the
    max() arm stops the slide at the pane edge when the written width is
-   larger than the pane. */
-@supports (margin-left: min(0px, calc((100% - attr(width px)) / 2))) {
-	.markdown-source-view.mod-cm6 .image-embed[width],
-	.markdown-preview-view .image-embed[width] {
-		max-width: calc(100% + 2 * var(--ped-img-bleed, 0px));
-		margin-left: min(0px, max(calc((100% - attr(width px)) / 2), calc(-1 * var(--ped-img-bleed, 0px))));
-	}
+   larger than the pane.
 
-	.markdown-source-view.mod-cm6 img[width]:not([class], .image-embed[width] img),
-	.markdown-preview-view img[width]:not([class], .image-embed[width] img) {
-		max-width: calc(100% + 2 * var(--ped-img-bleed, 0px));
-		margin-left: min(0px, max(calc((100% - attr(width px)) / 2), calc(-1 * var(--ped-img-bleed, 0px))));
-	}
+   This used to read the width out of the attribute inside calc, which only
+   Chromium 133+ does, so it lived behind @supports and never ran on mobile.
+   The mark is that gate now: an image the stamping pass has not reached keeps the base
+   rule above, one side's worth and left aligned, so nothing can grow into
+   room it has not been centered in. The mark is a data attribute rather than
+   a class, because the bare-image rules are scoped with :not([class]). */
+.markdown-source-view.mod-cm6 .image-embed[width][data-ped-sized],
+.markdown-preview-view .image-embed[width][data-ped-sized] {
+	max-width: calc(100% + 2 * var(--ped-img-bleed, 0px));
+	margin-left: min(0px, max(calc((100% - var(--ped-img-w, 0px)) / 2), calc(-1 * var(--ped-img-bleed, 0px))));
+}
+
+.markdown-source-view.mod-cm6 img[width][data-ped-sized]:not([class], .image-embed[width] img),
+.markdown-preview-view img[width][data-ped-sized]:not([class], .image-embed[width] img) {
+	max-width: calc(100% + 2 * var(--ped-img-bleed, 0px));
+	margin-left: min(0px, max(calc((100% - var(--ped-img-w, 0px)) / 2), calc(-1 * var(--ped-img-bleed, 0px))));
 }
 
 /* ---------- line spacing ---------- */
@@ -2785,10 +2791,20 @@ body .markdown-source-view.mod-cm6 .cm-line.ped-cb-in.HyperMD-codeblock:not(.ped
    padding is a widget standing after the number instead. */
 body .markdown-source-view.mod-cm6 .cm-line.ped-cb-in.ped-cb-step {
 	padding-inline-start: 0;
-	text-indent: calc(-1 * var(--ped-cb-pull, 0px));
+	/* The whole line box moves, and the card is put back by the same amount in
+	   the rule below, so what actually moves is the text. Shifting the box was
+	   done by indenting the first line until the directory's scan started
+	   reporting that property; the card can be compensated because it is an
+	   ::after pinned to this line, which is position: relative. */
+	margin-inline-start: calc(-1 * var(--ped-cb-pull, 0px));
 	font-family: var(--font-text);
 	font-size: 1em;
 	color: var(--text-normal);
+}
+
+/* put the card back where the box would have left it */
+body .markdown-source-view.mod-cm6 .cm-line.ped-cb-in.HyperMD-codeblock.ped-cb-step::after {
+	inset-inline-start: calc(var(--ped-cb-x) + var(--ped-cb-pull, 0px));
 }
 
 .ped-cb-pad {

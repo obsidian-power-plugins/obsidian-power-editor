@@ -2663,6 +2663,8 @@ export default class PowerEditorPlugin extends Plugin {
 		this.registerEditorExtension(listTables(this));
 		this.registerEditorExtension(codeBlockChrome);
 		this.registerEditorExtension(lineMarkers());
+		// newly rendered blocks in either view; the layout passes re-stamp the rest
+		this.registerMarkdownPostProcessor((el) => this.stampImageWidths(el));
 		// the "Set language" chip on an unlabelled fence
 		this.registerDomEvent(document, "click", (e) => {
 			const btn = (e.target as HTMLElement | null)?.closest?.(".ped-cb-lang") as HTMLElement | null;
@@ -6719,6 +6721,30 @@ export default class PowerEditorPlugin extends Plugin {
 		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
 			const view = leaf.view as MarkdownView;
 			view.containerEl.style.setProperty("--ped-img-bleed", this.imageBleed(view) + "px");
+			this.stampImageWidths(view.containerEl);
+		}
+	}
+
+	/**
+	 * Publish an image's own written width as --ped-img-w, and mark it, so
+	 * styles.css can center what overflows the column.
+	 *
+	 * The stylesheet read the width with attr() in calc, which is Chromium 133+
+	 * only, so the centering sat behind @supports and did nothing on older
+	 * engines or on mobile. A custom property works everywhere. The class is
+	 * what the wider max-width is gated on, in place of that @supports: an image
+	 * this pass has not reached keeps the base rule's one-side cap and stays
+	 * left aligned, which is what those engines already did, rather than being
+	 * allowed to grow into room nothing has centered it in.
+	 */
+	private stampImageWidths(root: ParentNode) {
+		for (const el of Array.from(root.querySelectorAll<HTMLElement>("img[width], .image-embed[width]"))) {
+			const w = el.getAttribute("width");
+			if (!w || !/^\d+$/.test(w)) continue;
+			el.style.setProperty("--ped-img-w", w + "px");
+			// a data attribute, not a class: the bare-image rule below is scoped
+			// with :not([class]), so giving one a class would stop it matching
+			el.dataset.pedSized = "1";
 		}
 	}
 
