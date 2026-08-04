@@ -39,6 +39,34 @@ button.ped-btn.is-active {
 	color: var(--text-accent);
 }
 
+/* A locked format painter keeps painting until it is stopped, so it has to read
+   as more than "on". The ring says still-held rather than merely active, and
+   sits outside the button so it survives whatever background is-active gives
+   it. Without this, armed and locked looked identical and the only way to tell
+   which one you were in was to paint something and see whether it let go. */
+button.ped-btn.is-active.ped-painter-locked {
+	box-shadow: 0 0 0 2px var(--background-primary), 0 0 0 4px var(--interactive-accent);
+}
+
+/* Column resize, which only runs when Power Tables is not installed to own it.
+   The cursor is scoped under the editor and repeated for the cell's contents:
+   the pointer is usually over a span or a text node rather than the cell, and
+   the editor sets its own cursor on both, which a bare element-and-class
+   selector only ties with. */
+.markdown-source-view th.ped-col-edge,
+.markdown-source-view td.ped-col-edge,
+.markdown-source-view th.ped-col-edge *,
+.markdown-source-view td.ped-col-edge * {
+	cursor: col-resize;
+}
+
+/* the edge that a drag would actually move, since the band is grabbable from
+   either side of the divider and the cursor alone cannot say which */
+.markdown-source-view th.ped-col-edge,
+.markdown-source-view td.ped-col-edge {
+	box-shadow: inset -2px 0 0 0 var(--interactive-accent);
+}
+
 /* line-level tools inside a table cell: the row is the line, so they have
    nothing they can act on. Reads as unavailable rather than looking ready and
    then refusing on click. Kept clickable so the press can explain itself. */
