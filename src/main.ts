@@ -57,6 +57,9 @@ import {
 	tableSnippet,
 	transformBlock,
 	unionBlockRange,
+	setHeaderCellWidth,
+	headerCellWidth,
+	MIN_COL_W,
 } from "./blocks";
 import { cleanPastedHtml, escapePlaceholderTags, FENCE_LINE, fenceIndent, findPlaceholderTags, insideFence, isOneMarkdownTable, listContentIndent, looksLikeMarkdownTable, nextItemAfterFence, planPastedMarkdown, tabbedTextToMarkdown, textBesideMarker, type PlaceholderTag } from "./clean";
 import { buildMultipart, planDictationInsert } from "./dictate";
@@ -2151,6 +2154,10 @@ export default class PowerEditorPlugin extends Plugin {
 	private bubbleHeadingLabel: HTMLElement | null = null;
 	private bubbleTimer: number | null = null;
 	private painter: { marks: Marks; sticky: boolean } | null = null;
+	/** In-flight column drag, and the header cell currently showing its grab
+	 *  edge. Both only ever set when Power Tables is not installed. */
+	private resizing: { th: HTMLTableCellElement; x: number; w: number; moved: boolean } | null = null;
+	private edgeHover: HTMLTableCellElement | null = null;
 	private colorPop: HTMLElement | null = null;
 	/* image resize state */
 	private imgGrips: HTMLElement[] = [];
@@ -2483,6 +2490,12 @@ export default class PowerEditorPlugin extends Plugin {
 		this.registerEvent(this.app.workspace.on("resize", () => this.updateImageBleed()));
 		this.registerEvent(this.app.workspace.on("layout-change", () => this.updateImageBleed()));
 		this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.updateImageBleed()));
+		// stored widths are re-painted whenever the rendering could have been
+		// rebuilt: the document holds the record, the inline style is only what
+		// the browser needs to hear
+		this.registerEvent(this.app.workspace.on("layout-change", () => this.applyTableWidths()));
+		this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.applyTableWidths()));
+		this.registerEvent(this.app.workspace.on("editor-change", () => this.applyTableWidths()));
 		this.registerEditorSuggest(new SlashSuggest(this));
 		// Enter at the visual start of a list item makes a new item above it.
 		//
@@ -3135,11 +3148,142 @@ export default class PowerEditorPlugin extends Plugin {
 				if (this.dragging) this.endDrag(null);
 				if (this.painter) {
 					this.painter = null;
-					this.paintButtons(false);
+					this.paintButtons("off");
 				}
 			});
 			this.registerDomEvent(document, "wheel", () => this.bubbleEl?.hide());
+			this.registerColumnResize();
 		}
+	}
+
+	/* ---------------- column widths (only when Power Tables is absent) ---------------- */
+
+	/**
+	 * Power Tables owns table cells wherever it is installed: it has the whole
+	 * cell model, the auto-fit, and the right-click menu, and two plugins
+	 * binding pointer handlers to the same header cells would fight over every
+	 * drag. So this exists purely so a vault running Power Editor on its own is
+	 * not stuck with columns it cannot size, and it stands down the moment its
+	 * sibling appears. The widths it writes are in Power Tables' own encoding,
+	 * so installing that later finds the columns already sized rather than a
+	 * private set it cannot read.
+	 */
+	private powerTablesActive(): boolean {
+		const plugs = (this.app as unknown as { plugins?: { enabledPlugins?: Set<string>; plugins?: Record<string, unknown> } }).plugins;
+		return !!plugs?.plugins?.["powertables"] || !!plugs?.enabledPlugins?.has("powertables");
+	}
+
+	/** The header cell whose right edge is under the pointer, resizing the
+	 *  column before it when the pointer is near a cell's LEFT edge instead: a
+	 *  divider is one target, and which cell owns it is an implementation
+	 *  detail the user should not have to aim around. */
+	private headerEdgeAt(evt: PointerEvent | MouseEvent): HTMLTableCellElement | null {
+		if (Platform.isPhone) return null;
+		if (!(evt.target instanceof Element)) return null;
+		const cell = evt.target.closest<HTMLTableCellElement>("th, td");
+		if (!cell) return null;
+		const tr = cell.closest<HTMLTableRowElement>("tr");
+		if (!tr || tr.rowIndex !== 0) return null;
+		// Live Preview only: the width has to be written back into the document,
+		// and a Reading-view table has no editor to write through.
+		if (!cell.closest(".markdown-source-view")) return null;
+		const r = cell.getBoundingClientRect();
+		if (evt.clientX >= r.right - 6 && evt.clientX <= r.right + 2) return cell;
+		if (evt.clientX <= r.left + 6 && evt.clientX >= r.left - 2) {
+			const prev = cell.previousElementSibling;
+			return prev instanceof HTMLTableCellElement ? prev : null;
+		}
+		return null;
+	}
+
+	private registerColumnResize() {
+		this.registerDomEvent(document, "pointermove", (evt) => {
+			if (this.resizing || this.powerTablesActive()) return;
+			const edge = this.headerEdgeAt(evt);
+			if (this.edgeHover && this.edgeHover !== edge) {
+				this.edgeHover.removeClass("ped-col-edge");
+				this.edgeHover = null;
+			}
+			if (edge) {
+				edge.addClass("ped-col-edge");
+				this.edgeHover = edge;
+			}
+		});
+		this.registerDomEvent(
+			document,
+			"pointerdown",
+			(evt) => {
+				if (this.powerTablesActive()) return;
+				const edge = this.headerEdgeAt(evt);
+				if (!edge) return;
+				evt.preventDefault();
+				evt.stopPropagation();
+				const start = { th: edge, x: evt.clientX, w: edge.getBoundingClientRect().width, moved: false };
+				this.resizing = start;
+				const move = (ev: PointerEvent) => {
+					if (Math.abs(ev.clientX - start.x) > 2) start.moved = true;
+					const w = Math.max(MIN_COL_W, Math.round(start.w + ev.clientX - start.x));
+					start.th.style.width = w + "px";
+					start.th.style.minWidth = w + "px";
+				};
+				const up = (ev: PointerEvent) => {
+					window.removeEventListener("pointermove", move);
+					window.removeEventListener("pointerup", up);
+					this.resizing = null;
+					if (!start.moved) return;
+					this.commitColumnWidth(start.th, Math.max(MIN_COL_W, Math.round(start.w + ev.clientX - start.x)));
+				};
+				window.addEventListener("pointermove", move);
+				window.addEventListener("pointerup", up);
+			},
+			{ capture: true }
+		);
+	}
+
+	/** Write the dragged width back into the header row. */
+	private commitColumnWidth(th: HTMLTableCellElement, width: number) {
+		const host = th.closest<HTMLElement>(".cm-editor");
+		const view = host ? EditorView.findFromDOM(host) : null;
+		if (!view) return;
+		let pos: number;
+		try {
+			pos = view.posAtDOM(th);
+		} catch {
+			return; // the cell is not part of this document's rendered text
+		}
+		const docLine = view.state.doc.lineAt(pos);
+		const col = Array.from(th.parentElement?.children ?? []).indexOf(th);
+		if (col < 0) return;
+		const next = setHeaderCellWidth(docLine.text, col, width);
+		if (next == null) return;
+		view.dispatch({ changes: { from: docLine.from, to: docLine.to, insert: next } });
+	}
+
+	/** Paint stored widths onto rendered tables. The document is the record; the
+	 *  inline style is just what the browser needs to hear. */
+	private applyTableWidths() {
+		if (Platform.isPhone || this.powerTablesActive()) return;
+		document.body.querySelectorAll(".markdown-source-view table").forEach((tbl) => {
+			const first = tbl.querySelector("tr");
+			if (!first) return;
+			const host = tbl.closest<HTMLElement>(".cm-editor");
+			const view = host ? EditorView.findFromDOM(host) : null;
+			if (!view) return;
+			Array.from(first.children).forEach((cellEl, col) => {
+				const el = cellEl as HTMLElement;
+				let w: number | null = null;
+				try {
+					w = headerCellWidth(view.state.doc.lineAt(view.posAtDOM(el)).text, col);
+				} catch {
+					return;
+				}
+				if (w == null) return;
+				if (el.style.width !== w + "px") {
+					el.style.width = w + "px";
+					el.style.minWidth = w + "px";
+				}
+			});
+		});
 	}
 
 	onunload() {
@@ -4905,7 +5049,7 @@ export default class PowerEditorPlugin extends Plugin {
 				const painter = btn(
 					"painter",
 					"paintbrush",
-					"Format painter: click to paint once, double-click to keep painting",
+					"Format painter: click to paint once, click again to keep painting, Esc to stop. Copying unformatted text strips formatting instead.",
 					(ed) => this.armPainter(ed),
 					"menu"
 				);
@@ -5655,9 +5799,21 @@ export default class PowerEditorPlugin extends Plugin {
 	 *  tree and enclosing HTML wrappers, a WYSIWYG selection holds only the
 	 *  inner text, so scanning the selection string finds nothing. */
 	private armPainter(ed: Editor, sticky = false) {
-		if (this.painter && !sticky) {
+		// off -> armed -> locked -> off, so the sticky mode is found by clicking
+		// the button rather than by knowing a gesture nothing advertises. The
+		// double-click still works and still goes straight to locked: it arrives
+		// as a second click with sticky set, and the branch below takes either
+		// route to the same place, so nothing depends on click timing.
+		if (this.painter) {
+			if (sticky || !this.painter.sticky) {
+				this.painter = { ...this.painter, sticky: true };
+				this.paintButtons("locked");
+				new Notice("Format painter locked on. Every selection you make takes the look; Esc or the brush stops it.");
+				return;
+			}
 			this.painter = null;
-			this.paintButtons(false);
+			this.paintButtons("off");
+			new Notice("Format painter off.");
 			return;
 		}
 		const sel = ed.getSelection();
@@ -5679,20 +5835,34 @@ export default class PowerEditorPlugin extends Plugin {
 			underline: text.underline || wrap.underline,
 			color: text.color ?? wrap.color,
 		};
-		if (!hasAnyMark(marks)) {
-			new Notice("That selection has no formatting to copy.");
-			return;
-		}
+		// Plain text is a legitimate thing to pick up: applyMarks strips before it
+		// adds, so painting with no marks clears formatting off what it lands on.
+		// That is how a few scattered bits of markup get tidied without hunting
+		// each one down, and it matches the painter in Power Tables.
+		const bare = !hasAnyMark(marks);
 		this.painter = { marks, sticky };
-		this.paintButtons(true);
-		new Notice(sticky ? "Format painter locked (Esc or click the brush to stop)." : "Format painter armed (select the text to paint).");
+		this.paintButtons(sticky ? "locked" : "armed");
+		new Notice(
+			sticky
+				? "Format painter locked (Esc or click the brush to stop)."
+				: bare
+					? "Format painter holding no formatting. Select text to strip it; click the brush again to keep going."
+					: "Format painter armed. Select the text to paint; click the brush again to keep painting."
+		);
 	}
 
-	private paintButtons(on: boolean) {
+	/** Locked has to look different from armed, not just from off: the whole
+	 *  point of the cycle is being able to tell whether the next paint is the
+	 *  last one. */
+	private paintButtons(mode: "off" | "armed" | "locked") {
+		const mark = (el?: HTMLElement | null) => {
+			el?.toggleClass("is-active", mode !== "off");
+			el?.toggleClass("ped-painter-locked", mode === "locked");
+		};
 		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-			this.bars.get(leaf.view as MarkdownView)?.buttons.get("painter")?.toggleClass("is-active", on);
+			mark(this.bars.get(leaf.view as MarkdownView)?.buttons.get("painter"));
 		}
-		this.bubbleButtons.get("painter")?.toggleClass("is-active", on);
+		mark(this.bubbleButtons.get("painter"));
 	}
 
 	private tryPaint() {
@@ -5703,7 +5873,7 @@ export default class PowerEditorPlugin extends Plugin {
 		ed.replaceSelection(applyMarks(sel, this.painter.marks));
 		if (!this.painter.sticky) {
 			this.painter = null;
-			this.paintButtons(false);
+			this.paintButtons("off");
 		}
 	}
 
