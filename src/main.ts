@@ -2159,6 +2159,7 @@ export default class PowerEditorPlugin extends Plugin {
 	private resizing: { th: HTMLTableCellElement; x: number; w: number; moved: boolean } | null = null;
 	private edgeHover: HTMLTableCellElement | null = null;
 	private colorPop: HTMLElement | null = null;
+	private rightPress: { x: number; y: number; el: Element; offered: boolean } | null = null;
 	/* image resize state */
 	private imgGrips: HTMLElement[] = [];
 	private imgBadge: HTMLElement | null = null;
@@ -2470,6 +2471,19 @@ export default class PowerEditorPlugin extends Plugin {
 			if (this.colorPop && !t?.closest?.(".ped-colorpop")) this.closeColorPopover();
 			if (this.imgBar && !t?.closest?.(".ped-imgbar")) this.closeImageBar();
 		});
+		// where a right-click landed, remembered before any menu can be built
+		// out of it; see rightPressPos
+		this.registerDomEvent(
+			document,
+			"pointerdown",
+			(e) => {
+				this.rightPress =
+					e.button === 2 && e.target instanceof Element
+						? { x: e.clientX, y: e.clientY, el: e.target, offered: false }
+						: null;
+			},
+			{ capture: true }
+		);
 		// Froala-style image toolbar: click an image in the editor to get
 		// align / size / alt / replace / delete right on top of it.
 		this.registerDomEvent(document, "click", (e) => {
@@ -2974,13 +2988,42 @@ export default class PowerEditorPlugin extends Plugin {
 		// Link dialog instead, which also understands bare pasted URLs
 		this.registerEvent(
 			this.app.workspace.on("editor-menu", (menu, editor) => {
-				const cur = editor.getCursor();
-				if (!linkAt(editor.getLine(cur.line), cur.ch)) return;
+				// the caret does not follow a right-click, so the press is a
+				// better answer than the cursor for which link was meant. A
+				// selection is the exception: that is what the user aimed with.
+				if (this.rightPress?.offered) return;
+				const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+				const at = editor.getSelection() || !view ? null : this.rightPressPos(view);
+				const probe = at ?? editor.getCursor();
+				if (!linkAt(editor.getLine(probe.line), probe.ch)) return;
+				if (this.rightPress) this.rightPress.offered = true;
 				menu.addItem((i) =>
-					i.setTitle("Edit link (Power Editor)").setIcon("link").setSection("selection").onClick(() => this.openLinkDialog(editor))
+					i
+						.setTitle("Edit link (Power Editor)")
+						.setIcon("link")
+						.setSection("selection")
+						.onClick(() => this.openLinkDialog(editor, at))
 				);
 			})
 		);
+		// A right-click on a link raises Obsidian's link menu, not the editor
+		// menu, so the item above is on the one menu that click never produces.
+		// These put the same offer on the menus it does. One press earns one
+		// offer, whichever of the three events carries it: they are not all
+		// guaranteed to be exclusive, and the same item twice on one menu is
+		// its own bug.
+		const onLinkMenu = (menu: Menu) => {
+			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+			if (!view || this.rightPress?.offered) return;
+			const at = this.rightPressPos(view);
+			if (!at || !linkAt(view.editor.getLine(at.line), at.ch)) return;
+			if (this.rightPress) this.rightPress.offered = true;
+			menu.addItem((i) =>
+				i.setTitle("Edit link (Power Editor)").setIcon("link").onClick(() => this.openLinkDialog(view.editor, at))
+			);
+		};
+		this.registerEvent(this.app.workspace.on("url-menu", (menu) => onLinkMenu(menu)));
+		this.registerEvent(this.app.workspace.on("file-menu", (menu) => onLinkMenu(menu)));
 		this.addCommand({
 			id: "copy-rich-text",
 			name: "Copy as rich text (for email)",
@@ -5524,6 +5567,26 @@ export default class PowerEditorPlugin extends Plugin {
 	 * text is selected therefore sees nothing while a cell selection is plainly
 	 * visible, which is what "the bubble doesn't work in tables" was.
 	 */
+	/**
+	 * The document position the last right-click landed on, when it landed in
+	 * this note's own editor.
+	 *
+	 * A contextmenu handler cannot be relied on to run before the one building
+	 * Obsidian's link menu, but a press always precedes both, so the press is
+	 * what gets remembered. A table cell edits in a CodeMirror of its own whose
+	 * offsets are the cell's rather than the note's, so those are left alone:
+	 * Power Tables owns the menu inside a table.
+	 */
+	private rightPressPos(view: MarkdownView): EditorPosition | null {
+		const p = this.rightPress;
+		if (!p || p.el.closest(".cm-table-widget") || !view.containerEl.contains(p.el)) return null;
+		const cm = (view.editor as unknown as { cm?: EditorView }).cm ?? null;
+		const off = cm?.posAtCoords({ x: p.x, y: p.y });
+		if (cm == null || off == null) return null;
+		const l = cm.state.doc.lineAt(off);
+		return { line: l.number - 1, ch: off - l.from };
+	}
+
 	private focusedCm(fallback: EditorView | null): EditorView | null {
 		const host = (document.activeElement as HTMLElement | null)?.closest?.(".cm-editor") as HTMLElement | null;
 		return (host ? EditorView.findFromDOM(host) : null) ?? fallback;
@@ -5594,14 +5657,15 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	/** The Link dialog: prefills from the selection, or edits the link under
-	 *  the cursor in place. */
-	private openLinkDialog(ed: Editor) {
+	 *  the cursor in place. `at` overrides both, for a right-click, which
+	 *  carries a position of its own and no selection. */
+	private openLinkDialog(ed: Editor, at: EditorPosition | null = null) {
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 		if (!view) return;
 		const doc = this.cursorDoc(ed);
-		let from = doc.from;
-		let to = doc.to;
-		let text = doc.selection;
+		let from = at ?? doc.from;
+		let to = at ?? doc.to;
+		let text = at ? "" : doc.selection;
 		let address = "";
 		let noteQuery = "";
 		// a link under the cursor (or covering the selection) is edited in
