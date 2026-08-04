@@ -717,6 +717,29 @@ const BUTTON_IDS: [string, string][] = [
 	["clear", "Clear formatting"],
 ];
 
+/**
+ * Buttons that act on a whole line or block. Inside a Live Preview table cell
+ * the document line is the entire table row, so these would write their marker
+ * onto the row itself: "- | Date | Amount |" is not a table any more. They grey
+ * out in a cell rather than quietly breaking it, and Power Tables owns
+ * formatting inside cells anyway.
+ */
+const TABLE_INERT = new Set([
+	"heading",
+	"bullet",
+	"ordered",
+	"task",
+	"quote",
+	"callout",
+	"toggle",
+	"align",
+	"indent",
+	"outdent",
+	"codeblock",
+	"table",
+	"hr",
+]);
+
 /** The toolbar's out-of-the-box order, dividers included. "|" is a divider
  *  rather than a button: it can be moved, added and removed like anything
  *  else, which is the only way grouping survives a custom order. */
@@ -2017,6 +2040,8 @@ interface Bar {
 	el: HTMLElement;
 	buttons: Map<string, HTMLElement>;
 	headingLabel: HTMLElement;
+	/** Watches this view for a table plugin docking its own bar. */
+	handOff?: MutationObserver;
 }
 
 export default class PowerEditorPlugin extends Plugin {
@@ -3055,6 +3080,7 @@ export default class PowerEditorPlugin extends Plugin {
 		document.body.removeClass("ped-imgresizing");
 		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
 			const view = leaf.view as MarkdownView;
+			this.bars.get(view)?.handOff?.disconnect();
 			view.containerEl.querySelector(":scope > .ped-toolbar")?.remove();
 		}
 	}
@@ -4509,6 +4535,7 @@ export default class PowerEditorPlugin extends Plugin {
 	/** Tear down and re-create every toolbar (settings changes). */
 	rebuildToolbars() {
 		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
+			this.bars.get(leaf.view as MarkdownView)?.handOff?.disconnect();
 			(leaf.view as MarkdownView).containerEl.querySelector(":scope > .ped-toolbar")?.remove();
 		}
 		this.ensureToolbars();
@@ -4634,6 +4661,7 @@ export default class PowerEditorPlugin extends Plugin {
 	private buildToolbar(view: MarkdownView) {
 		const content = view.containerEl.querySelector(":scope > .view-content");
 		if (!content) return;
+		this.bars.get(view)?.handOff?.disconnect();
 		const el = createDiv({ cls: "ped-toolbar" });
 		view.containerEl.insertBefore(el, content);
 		const buttons = new Map<string, HTMLElement>();
@@ -4648,6 +4676,7 @@ export default class PowerEditorPlugin extends Plugin {
 			setIcon(b, icon);
 			b.addEventListener("pointerdown", (e) => {
 				e.preventDefault();
+				if (this.blockedInTable(id)) return;
 				if (opens === "act") {
 					const ed = this.activeEditor();
 					if (ed) fn(ed);
@@ -4655,6 +4684,7 @@ export default class PowerEditorPlugin extends Plugin {
 			});
 			if (opens === "menu") {
 				b.addEventListener("click", () => {
+					if (this.blockedInTable(id)) return;
 					const ed = this.activeEditor();
 					if (ed) fn(ed);
 				});
@@ -4779,7 +4809,10 @@ export default class PowerEditorPlugin extends Plugin {
 			anyYet = true;
 		}
 
-		this.bars.set(view, { el, buttons, headingLabel });
+		const handOff = new MutationObserver(() => this.syncHandOff(view));
+		handOff.observe(view.containerEl, { childList: true });
+		this.bars.set(view, { el, buttons, headingLabel, handOff });
+		this.syncHandOff(view);
 	}
 
 	/* ---------------- actions ---------------- */
@@ -5188,6 +5221,14 @@ export default class PowerEditorPlugin extends Plugin {
 	 */
 	private inTableCell(): boolean {
 		return !!(document.activeElement as HTMLElement | null)?.closest?.(".cm-table-widget");
+	}
+
+	/** A line-level button pressed inside a table cell. Refuse it, and say where
+	 *  the tool for that job actually lives, rather than rewriting the row. */
+	private blockedInTable(id: string): boolean {
+		if (!TABLE_INERT.has(id) || !this.inTableCell()) return false;
+		new Notice("Power Editor: that acts on a whole line, so it cannot work inside a table cell. Use the Power Tables panel.", 4000);
+		return true;
 	}
 
 	private cursorDoc(ed: Editor): CursorDoc {
@@ -5739,6 +5780,7 @@ export default class PowerEditorPlugin extends Plugin {
 			setIcon(b, icon);
 			b.addEventListener("pointerdown", (e) => {
 				e.preventDefault();
+				if (this.blockedInTable(id)) return;
 				if (opens === "act") {
 					const ed = this.activeEditor();
 					if (ed) fn(ed);
@@ -5746,6 +5788,7 @@ export default class PowerEditorPlugin extends Plugin {
 			});
 			if (opens === "menu") {
 				b.addEventListener("click", () => {
+					if (this.blockedInTable(id)) return;
 					const ed = this.activeEditor();
 					if (ed) fn(ed);
 				});
@@ -6053,6 +6096,14 @@ export default class PowerEditorPlugin extends Plugin {
 			return;
 		}
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+		// A table plugin's own bar is docked in this view and the cursor is in a
+		// table, so it owns cell formatting: floating a second set of buttons
+		// over the selection would be the same duplication the docked hand-off
+		// already removed. Same DOM check, no call into that plugin.
+		if (view?.containerEl.querySelector(":scope > .ptb-tablebar")) {
+			this.bubbleEl?.hide();
+			return;
+		}
 		const ed = view?.getMode() === "source" ? view.editor : null;
 		// The focused CodeMirror, not the note's: a selection inside a table cell
 		// lives in the nested editor Obsidian gives each table, and the note's
@@ -6776,6 +6827,22 @@ export default class PowerEditorPlugin extends Plugin {
 		return count % 2 === 1;
 	}
 
+	/**
+	 * Step aside while a table plugin has its own bar docked in this view.
+	 *
+	 * Deliberately not asking whether the cursor is in a table cell: applying an
+	 * edit re-renders the table widget, which destroys the focused cell and
+	 * drops focus to the body, so a focus-based answer flips to "no" the instant
+	 * you press anything and this toolbar reappears underneath theirs. The other
+	 * plugin already decides when a table is being worked on, and mounting its
+	 * bar is that decision made visible, so mirror it and nothing else.
+	 */
+	private syncHandOff(view: MarkdownView) {
+		const bar = this.bars.get(view);
+		if (!bar || !bar.el.isConnected) return;
+		bar.el.toggleClass("is-handed-over", !!view.containerEl.querySelector(":scope > .ptb-tablebar"));
+	}
+
 	private refreshStates() {
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 		if (!view) return;
@@ -6788,6 +6855,14 @@ export default class PowerEditorPlugin extends Plugin {
 			bar.buttons.get(id)?.toggleClass("is-active", on);
 			this.bubbleButtons.get(id)?.toggleClass("is-active", on);
 		};
+		// Inside a table cell the line-level tools have nothing they can safely
+		// do, so they read as unavailable instead of looking ready and refusing.
+		const inCell = this.inTableCell();
+		for (const id of TABLE_INERT) {
+			bar.buttons.get(id)?.toggleClass("is-disabled", inCell);
+			this.bubbleButtons.get(id)?.toggleClass("is-disabled", inCell);
+		}
+		this.syncHandOff(view);
 		// prefer the real parse tree; fall back to marker parity when it's coy
 		const marks = this.treeMarks(view) ?? {
 			bold: this.inMark(line, cur.ch, "**"),

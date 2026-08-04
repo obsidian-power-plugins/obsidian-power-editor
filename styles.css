@@ -39,6 +39,19 @@ button.ped-btn.is-active {
 	color: var(--text-accent);
 }
 
+/* line-level tools inside a table cell: the row is the line, so they have
+   nothing they can act on. Reads as unavailable rather than looking ready and
+   then refusing on click. Kept clickable so the press can explain itself. */
+button.ped-btn.is-disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+
+button.ped-btn.is-disabled:hover {
+	background: none;
+	color: var(--text-muted);
+}
+
 button.ped-btn svg {
 	width: 16px;
 	height: 16px;
@@ -2763,3 +2776,10 @@ body .markdown-source-view.mod-cm6 .cm-line.ped-cb-in.ped-cb-step {
 	width: var(--size-4-4);
 }
 
+
+/* A table plugin has docked its own toolbar in this view and the cursor is in
+   a table, so this one stands aside: its line-level tools cannot act there and
+   the rest would just be a second copy of what that bar already offers. */
+.ped-toolbar.is-handed-over {
+	display: none;
+}
