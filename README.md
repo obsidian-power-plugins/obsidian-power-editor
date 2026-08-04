@@ -119,6 +119,19 @@ Power Editor makes network calls **only for the two opt-in features that need th
 
 Everything else (formatting, blocks, links, images, tables, paste cleanup) is fully local.
 
+### What the catalog's scan reports
+
+The community catalog scans a plugin for what it is *capable* of, which is not the same as what it does with it. Power Editor reports two things.
+
+| What the scan reports | What it is | Where |
+| --- | --- | --- |
+| **Vault enumeration** | Listing your notes, for the things that have to offer you one: the image picker, the link dialog's file suggestions, and the note pickers behind the block and template actions. Only paths and extensions are looked at, and the list stays inside Obsidian. | [`src/main.ts`](src/main.ts), the picker and suggestion builders |
+| **Clipboard access** | **Reading:** two commands you run, **Paste as clean Markdown** and **Insert clipboard formats**, which is a troubleshooting command that shows you the flavors on your clipboard. **Writing:** *Copy as rich text*, and the copy cleanup below. Nothing reads the clipboard on its own, on a timer, or in the background. | [`src/main.ts`](src/main.ts) `clipboardHtml`, `onCopyOut` |
+
+**One behavior worth stating plainly:** Power Editor listens for your own copy and cut, and when the selection contains formatting it rewrites the *plain-text* flavor of what you copied, so highlighted or colored text does not paste its raw `<mark>` and `<span>` source into other apps. It only acts inside the Markdown source view, only when there is a selection, and only when cleaning would actually change something; otherwise Obsidian's own copy runs untouched. Set **Copy mode** to off and it never fires.
+
+There is no `eval`, no `Function` constructor, no code fetched and run at runtime, and no processes started. The plugin's own network calls go through Obsidian's `requestUrl`. Two `fetch` calls appear in the built `main.js`: they belong to the bundled `@anthropic-ai/sdk`, and they run only when you have an AI key set and use an AI edit.
+
 ## Settings
 
 Toolbar on/off (and separately on mobile), per-button visibility, selection bubble, block handles, headings-move-sections, clean paste, WYSIWYG mode, line spacing (compact / normal / relaxed), indent guides on numbered lists, space under headings and around tables, dictation mode, transcription endpoint/key/model, AI key, model, and custom AI actions.
