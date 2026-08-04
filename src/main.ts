@@ -1697,7 +1697,7 @@ class TodoBlock extends MarkdownRenderChild {
 				chip.draggable = true;
 				chip.addEventListener("dragstart", (e) => e.dataTransfer?.setData("text/ped-todo", String(items.indexOf(t))));
 				chip.addEventListener("click", () => {
-					void this.plugin.app.workspace.openLinkText(t.path ?? "", "", false, { eState: { line: t.line } });
+					void this.plugin.showAt(t.path ?? "", { line: t.line });
 				});
 			}
 		}
@@ -1738,7 +1738,7 @@ class TodoBlock extends MarkdownRenderChild {
 				chip.draggable = droppable;
 				chip.addEventListener("dragstart", (e) => e.dataTransfer?.setData("text/ped-todo", String(items.indexOf(t))));
 				chip.addEventListener("click", () => {
-					void this.plugin.app.workspace.openLinkText(t.path ?? "", "", false, { eState: { line: t.line } });
+					void this.plugin.showAt(t.path ?? "", { line: t.line });
 				});
 			}
 		}
@@ -1862,7 +1862,7 @@ class CommentsView extends ItemView {
 				main.createDiv({ cls: "ped-comment-text", text: cm.text });
 				if (cm.stamp) main.createDiv({ cls: "ped-comment-stamp", text: cm.stamp });
 				main.addEventListener("click", () => {
-					void this.plugin.app.workspace.openLinkText(f.path, "", false, { eState: { line: cm.line } });
+					void this.plugin.showAt(f.path, { line: cm.line });
 				});
 				row.createEl("button", { cls: "ped-comment-resolve", text: "Resolve" }).addEventListener("click", (e) => {
 					e.stopPropagation();
@@ -1936,7 +1936,14 @@ class TocBlock extends MarkdownRenderChild {
 			item.style.marginInlineStart = (h.level - min) * 16 + "px";
 			item.setText(h.heading);
 			item.addEventListener("click", () => {
-				void this.plugin.app.workspace.openLinkText(this.path + "#" + h.heading, this.path);
+				// The heading after the hash is Obsidian's to resolve, so this one
+				// keeps going through openLinkText. Stepping to the tab the note is
+				// already in first is enough to stop a second copy, since an open
+				// with no new tab asked for lands in whichever tab is active.
+				void (async () => {
+					await this.plugin.focusOpenTab(this.path);
+					await this.plugin.app.workspace.openLinkText(this.path + "#" + h.heading, this.path);
+				})();
 			});
 		}
 	}
@@ -3357,6 +3364,60 @@ export default class PowerEditorPlugin extends Plugin {
 		});
 	}
 
+	/**
+	 * The main-area tab already showing this path, if there is one.
+	 *
+	 * Asked through `getViewState()` rather than `leaf.view.file`, because every
+	 * tab you are not standing in is deferred since 1.7.2: its view is a stand-in
+	 * that holds no file, and reaching for one to ask would load every tab in the
+	 * window. The view state carries the path whether the view is real or not.
+	 *
+	 * Main-area leaves only. A note showing in a sidebar is not a tab, and a note
+	 * deliberately popped out into a window of its own should not have a panel
+	 * pulling focus to another window behind your back.
+	 */
+	private openLeafFor(path: string): WorkspaceLeaf | null {
+		const hits: WorkspaceLeaf[] = [];
+		this.app.workspace.iterateRootLeaves((leaf) => {
+			const open = leaf.getViewState().state?.file;
+			if (typeof open === "string" && open === path) hits.push(leaf);
+		});
+		return hits[0] ?? null;
+	}
+
+	/** Step to the tab already holding this path, if there is one. The open is
+	 *  left to the caller, so an `openLinkText` that follows lands in the tab
+	 *  this just made active and keeps Obsidian's own subpath handling. */
+	async focusOpenTab(path: string): Promise<void> {
+		const open = this.openLeafFor(path);
+		if (!open) return;
+		await this.app.workspace.revealLeaf(open);
+		this.app.workspace.setActiveLeaf(open, { focus: true });
+	}
+
+	/**
+	 * Jump to a line in a note, in the tab already holding it when there is one.
+	 *
+	 * Every panel in here lists things that live in notes: todos, comments,
+	 * headings. Clicking one asked to open its note without ever asking where
+	 * that note already was, so a chip clicked from anywhere but the note itself
+	 * laid a second copy of it over what you were looking at. That is a bad trade
+	 * in a to-do panel, where clicking through eight items in a row is the normal
+	 * way to use it and used to leave you with a tab for each.
+	 */
+	async showAt(path: string, eState?: Record<string, unknown>): Promise<void> {
+		const open = this.openLeafFor(path);
+		if (open) {
+			// awaited: the tab was deferred right up until now, and the ephemeral
+			// state below has nothing to scroll until its view actually exists
+			await this.app.workspace.revealLeaf(open);
+			this.app.workspace.setActiveLeaf(open, { focus: true });
+			if (eState) open.setEphemeralState(eState);
+			return;
+		}
+		await this.app.workspace.openLinkText(path, "", false, eState ? { eState } : undefined);
+	}
+
 	/** One dashboard/pane row: live checkbox, body, snoozable due chip,
 	 *  recurrence hint, and a link to the source note. */
 	renderTodoItem(list: HTMLElement, t: TodoItem) {
@@ -3383,7 +3444,7 @@ export default class PowerEditorPlugin extends Plugin {
 			text: (t.path ?? "").replace(/\.md$/, "").split("/").pop() ?? "",
 		});
 		src.addEventListener("click", () => {
-			void this.app.workspace.openLinkText(t.path ?? "", "", false, { eState: { line: t.line } });
+			void this.showAt(t.path ?? "", { line: t.line });
 		});
 	}
 
