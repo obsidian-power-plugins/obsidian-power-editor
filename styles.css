@@ -1108,7 +1108,7 @@ input.ped-prompt-input {
 
 .ped-has-cover {
 	position: relative;
-	padding-top: 236px !important;
+	padding-top: 236px;
 }
 
 .ped-cover {
@@ -1142,20 +1142,20 @@ input.ped-prompt-input {
 
 /* banner heights (standard is the default above) */
 .ped-has-cover.ped-h-short {
-	padding-top: 136px !important;
+	padding-top: 136px;
 }
 .ped-has-cover.ped-h-short .ped-cover {
 	height: 120px;
 }
 .ped-has-cover.ped-h-tall {
-	padding-top: 376px !important;
+	padding-top: 376px;
 }
 .ped-has-cover.ped-h-tall .ped-cover {
 	height: 360px;
 }
 
 /* a soft scrim under an image cover keeps the buttons and any title readable */
-.ped-cover:has(.ped-cover-img)::after {
+.ped-cover.ped-cover-has-img::after {
 	content: "";
 	position: absolute;
 	inset: 0;
@@ -1193,7 +1193,7 @@ input.ped-prompt-input {
 }
 
 .is-mobile .ped-has-cover {
-	padding-top: 156px !important;
+	padding-top: 156px;
 }
 
 .is-mobile .ped-cover {
@@ -1205,13 +1205,13 @@ input.ped-prompt-input {
 }
 
 .is-mobile .ped-has-cover.ped-h-short {
-	padding-top: 106px !important;
+	padding-top: 106px;
 }
 .is-mobile .ped-has-cover.ped-h-short .ped-cover {
 	height: 90px;
 }
 .is-mobile .ped-has-cover.ped-h-tall {
-	padding-top: 236px !important;
+	padding-top: 236px;
 }
 .is-mobile .ped-has-cover.ped-h-tall .ped-cover {
 	height: 220px;
@@ -1340,7 +1340,7 @@ input.ped-prompt-input {
    rather than a border on the title: it then travels with the stamp, and a
    title that wraps to two lines cannot leave the line stranded. The title's
    own bottom gap is closed only when this stamp actually follows it. */
-.inline-title:has(+ .ped-edited.is-rule) {
+.inline-title.ped-title-ruled {
 	margin-bottom: 0;
 }
 
@@ -1563,13 +1563,15 @@ body.ped-mobile-bar .mobile-toolbar-option:last-child {
 
 /* the tabs/columns widgets draw their own frame; drop the editor's bold
    code-block border around them so there's just one, not two nested ones.
-   !important because Obsidian re-adds the border/shadow on hover. */
-.markdown-source-view.mod-cm6 .cm-embed-block:has(.ped-tabs),
-.markdown-source-view.mod-cm6 .cm-embed-block:has(.ped-columns) {
-	border: none !important;
-	box-shadow: none !important;
-	padding: 0 !important;
-	background: transparent !important;
+   The block carries the class from script. Obsidian re-adds the border and
+   shadow on its own :hover rule, which is why the hover case is spelled out
+   here rather than left to the plain selector. */
+.markdown-source-view.mod-cm6 .cm-embed-block.ped-embed-plain,
+.markdown-source-view.mod-cm6 .cm-embed-block.ped-embed-plain:hover {
+	border: none;
+	box-shadow: none;
+	padding: 0;
+	background: transparent;
 }
 
 .ped-tabs {
@@ -1688,11 +1690,14 @@ textarea.ped-tab-edit:focus {
 	padding: 0;
 }
 
-.ped-tabpane.ped-tab-cm .cm-sizer {
-	padding: 0 !important;
-	margin: 0 !important;
-	max-width: none !important;
-	min-height: 0 !important;
+.ped-tabpane.ped-tab-cm {
+	--file-line-width: none;
+}
+/* the class is repeated to outweigh Obsidian's own .cm-sizer rule */
+.ped-tabpane.ped-tab-cm .cm-sizer.cm-sizer {
+	padding: 0;
+	margin: 0;
+	min-height: 0;
 }
 
 .ped-tabpane.ped-tab-cm .cm-content {
@@ -1778,8 +1783,9 @@ body.is-mobile .ped-columns {
 .ped-columns-live .ped-column:hover .ped-col-remove {
 	opacity: 0.7;
 }
-.ped-col-remove:hover {
-	opacity: 1 !important;
+.ped-col-remove:hover,
+.ped-columns-live .ped-column:hover .ped-col-remove:hover {
+	opacity: 1;
 	color: var(--text-normal);
 }
 .ped-col-remove .svg-icon {
@@ -1812,9 +1818,11 @@ body.is-mobile .ped-columns {
 }
 
 /* ---------- per-note page options: width, font, cover overlay ---------- */
-.ped-full-width .cm-sizer,
-.ped-full-width .markdown-preview-sizer {
-	max-width: none !important;
+/* Obsidian caps the sizer with max-width: var(--file-line-width) under its
+   own .is-readable-line-width rules. Clearing the variable is the supported
+   way through: its rule still wins, it just resolves to no cap. */
+.ped-full-width {
+	--file-line-width: none;
 }
 .ped-font-serif .cm-content,
 .ped-font-serif .markdown-preview-view {

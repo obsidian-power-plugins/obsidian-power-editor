@@ -3552,6 +3552,19 @@ export default class PowerEditorPlugin extends Plugin {
 	 *  list handling, and the toolbar all work inside it, and edits write back
 	 *  into the `tabs` code block on blur / tab switch / teardown. If the
 	 *  internal editor can't be built, falls back to the textarea panes. */
+	/** Mark the code block's frame so styles.css can drop it by class.
+	 *
+	 *  The frame belongs to Obsidian's `.cm-embed-block`, an ancestor, and a
+	 *  stylesheet can only reach a parent from a child with `:has()`, which the
+	 *  directory flags for the invalidation cost. The container is not always
+	 *  attached when a post-processor runs, so this also tries once more on the
+	 *  next frame; addClass is idempotent, so a hit on both is harmless. */
+	private markPlainEmbed(el: HTMLElement) {
+		const mark = () => el.closest(".cm-embed-block")?.addClass("ped-embed-plain");
+		mark();
+		window.requestAnimationFrame(mark);
+	}
+
 	private renderTabs(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) {
 		if (!this.paneEditorsOk) {
 			this.renderTabsBasic(source, el, ctx);
@@ -3612,6 +3625,7 @@ export default class PowerEditorPlugin extends Plugin {
 			pane = null;
 		});
 
+		this.markPlainEmbed(el);
 		const root = el.createDiv({ cls: "ped-tabs" });
 		root.addEventListener("mousedown", (e) => e.stopPropagation());
 		const strip = root.createDiv({ cls: "ped-tabstrip" });
@@ -3754,6 +3768,7 @@ export default class PowerEditorPlugin extends Plugin {
 			});
 		};
 
+		this.markPlainEmbed(el);
 		const root = el.createDiv({ cls: "ped-tabs" });
 		// keep clicks inside the widget from moving the editor caret / revealing source
 		root.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -3951,6 +3966,7 @@ export default class PowerEditorPlugin extends Plugin {
 			editors.length = 0;
 		});
 
+		this.markPlainEmbed(el);
 		const root = el.createDiv({ cls: "ped-columns ped-columns-live" });
 		root.addEventListener("mousedown", (e) => e.stopPropagation());
 
@@ -4064,6 +4080,7 @@ export default class PowerEditorPlugin extends Plugin {
 		}
 		const child = new MarkdownRenderChild(el);
 		ctx.addChild(child);
+		this.markPlainEmbed(el);
 		const root = el.createDiv({ cls: "ped-columns" });
 		for (const p of panes) {
 			const col = root.createDiv({ cls: "ped-column" });
@@ -4222,6 +4239,7 @@ export default class PowerEditorPlugin extends Plugin {
 			let el = host.querySelector<HTMLElement>(`:scope > .ped-edited.is-${where}`);
 			if (!wanted) {
 				el?.remove();
+				if (anchor instanceof HTMLElement) anchor.removeClass("ped-title-ruled");
 				return;
 			}
 			if (!el) {
@@ -4239,8 +4257,13 @@ export default class PowerEditorPlugin extends Plugin {
 			}
 			// set every pass, not just on create: the stamp outlives a change
 			// of this setting, so the old look has to come back off it
-			el.toggleClass("is-rule", where === "title" && pos === "rule");
+			const ruled = where === "title" && pos === "rule";
+			el.toggleClass("is-rule", ruled);
 			el.toggleClass("is-tight", where === "title" && opensOnHeading);
+			// the title closes its own bottom gap only when the ruled stamp
+			// actually follows it, which the title carries as a class rather
+			// than the stylesheet asking whether one does
+			if (anchor instanceof HTMLElement) anchor.toggleClass("ped-title-ruled", ruled);
 			el.setText(text);
 			el.setAttribute("aria-label", exact);
 			el.setAttribute("title", exact);
@@ -4318,6 +4341,9 @@ export default class PowerEditorPlugin extends Plugin {
 				h.insertBefore(el, h.firstChild);
 			}
 			el.empty();
+			// the scrim under the buttons is only wanted over a picture, and the
+			// element says so itself rather than the stylesheet looking inside it
+			el.removeClass("ped-cover-has-img");
 			el.style.removeProperty("background-image");
 			el.style.removeProperty("background-color");
 			if (spec.kind === "gradient") {
@@ -4329,6 +4355,7 @@ export default class PowerEditorPlugin extends Plugin {
 				if (src) {
 					const img = el.createEl("img", { cls: "ped-cover-img", attr: { src, draggable: "false" } });
 					img.style.objectPosition = `50% ${spec.y}%`;
+					el.addClass("ped-cover-has-img");
 				}
 			}
 			const bar = el.createDiv({ cls: "ped-cover-bar" });
