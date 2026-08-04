@@ -879,3 +879,90 @@ export function insertItemAbove(lines: string[], line: number): { lines: string[
 	}
 	return { lines: out, caret: line };
 }
+
+/* ---------------- table column widths ---------------- */
+
+/* Widths live in the document, on the header cell, as
+ *   | <span class="ptb" data-w="180">Location</span> | Count |
+ * which is deliberately the encoding Power Tables already uses rather than one
+ * of our own. This only runs when Power Tables is absent, and a vault that
+ * installs it later should find its columns already the right size instead of
+ * a second, private set of widths it cannot read. Without either plugin the
+ * span degrades to plain text, so the table stays a table.
+ */
+
+/** Same clamp Power Tables applies, so a width written by either is legal to
+ *  the other. */
+export const MIN_COL_W = 48;
+export const MAX_COL_W = 1200;
+
+/** Split a table row on unescaped pipes. `pieces[0]` is whatever precedes the
+ *  first pipe (indentation, blockquote markers); cell n is `pieces[n + 1]`. */
+export function splitTableRow(line: string): string[] | null {
+	if (!line.includes("|")) return null;
+	const out: string[] = [];
+	let cur = "";
+	for (let i = 0; i < line.length; i++) {
+		if (line[i] === "\\" && line[i + 1] === "|") {
+			cur += "\\|";
+			i++;
+			continue;
+		}
+		if (line[i] === "|") {
+			out.push(cur);
+			cur = "";
+			continue;
+		}
+		cur += line[i];
+	}
+	out.push(cur);
+	// a real row has a pipe on both sides of at least one cell
+	return out.length >= 3 ? out : null;
+}
+
+const PTB_SPAN = /^\s*<span class="(ptb[^"]*)"([^>]*)>([\s\S]*)<\/span>\s*$/;
+
+/**
+ * Rewrite `line` so column `col` carries `width` (or loses it when null).
+ * Returns null when the line is not a table row, the column does not exist, or
+ * nothing would change, so callers can skip a no-op edit.
+ *
+ * An existing Power Tables span is edited in place rather than replaced, so
+ * colours, borders and number formats already on that header cell survive a
+ * drag. Clearing the last attribute unwraps the span instead of leaving an
+ * empty one behind.
+ */
+export function setHeaderCellWidth(line: string, col: number, width: number | null): string | null {
+	const pieces = splitTableRow(line);
+	if (!pieces) return null;
+	const idx = col + 1;
+	if (idx < 1 || idx >= pieces.length) return null;
+
+	const piece = pieces[idx];
+	const w = width == null ? null : String(Math.max(MIN_COL_W, Math.min(MAX_COL_W, Math.round(width))));
+	const m = piece.match(PTB_SPAN);
+
+	let next: string;
+	if (m) {
+		const cls = m[1];
+		let attrs = m[2].replace(/\s*data-w="\d{2,4}"/, "");
+		if (w) attrs += ` data-w="${w}"`;
+		next = attrs.trim() === "" && cls === "ptb" ? ` ${m[3].trim()} ` : ` <span class="${cls}"${attrs}>${m[3]}</span> `;
+	} else {
+		if (!w) return null;
+		next = ` <span class="ptb" data-w="${w}">${piece.trim()}</span> `;
+	}
+
+	if (next === piece) return null;
+	pieces[idx] = next;
+	return pieces.join("|");
+}
+
+/** The width stored on column `col` of a header row, or null. */
+export function headerCellWidth(line: string, col: number): number | null {
+	const pieces = splitTableRow(line);
+	if (!pieces) return null;
+	const piece = pieces[col + 1];
+	const w = piece?.match(/<span class="ptb[^"]*"[^>]*\sdata-w="(\d{2,4})"/)?.[1];
+	return w ? Number(w) : null;
+}

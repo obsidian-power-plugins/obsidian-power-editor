@@ -26,6 +26,9 @@ import {
 	tableSnippet,
 	transformBlock,
 	unionBlockRange,
+	setHeaderCellWidth,
+	headerCellWidth,
+	splitTableRow,
 } from "../src/blocks";
 import { resizeEmbed } from "../src/embed";
 import {
@@ -1463,4 +1466,45 @@ eq(moveItem(["a", "b"], 5, 0).join(""), "ab", "an out-of-range source is ignored
 	eq(versionFromManifest("{}"), null, "and neither does one with no version key");
 	eq(versionFromManifest('{"version":"1.2.3"}'), "1.2.3", "otherwise the version is read off it");
 	eq(versionFromManifest('{"version":"  "}'), null, "a blank version is no version");
+}
+
+/* ---------------- table column widths ---------------- */
+{
+	const H = "| Location | Count | Cuts |";
+
+	eq(splitTableRow("no pipes here"), null, "a line with no pipes is not a table row");
+	eq(splitTableRow(H)?.length, 5, "a three-cell row splits into lead, three cells, and trail");
+	eq(splitTableRow("| a \\| b | c |")?.length, 4, "an escaped pipe stays inside its cell");
+
+	// setting a width wraps the header cell in the encoding Power Tables reads
+	const w1 = setHeaderCellWidth(H, 1, 180)!;
+	eq(w1, '| Location | <span class="ptb" data-w="180">Count</span> | Cuts |', "a width wraps that header cell and leaves the others alone");
+	eq(headerCellWidth(w1, 1), 180, "and reads back off it");
+	eq(headerCellWidth(w1, 0), null, "a column with no width reads as none");
+
+	// dragging again edits the span in place rather than nesting a second one
+	const w2 = setHeaderCellWidth(w1, 1, 240)!;
+	eq((w2.match(/<span/g) ?? []).length, 1, "resizing again does not nest spans");
+	eq(headerCellWidth(w2, 1), 240, "the new width replaces the old");
+
+	// the reason for editing in place: other Power Tables formatting must survive
+	const styled = '| <span class="ptb" style="background:#0F0" data-b="tb">Location</span> | Count |';
+	const w3 = setHeaderCellWidth(styled, 0, 120)!;
+	ok(w3.includes('style="background:#0F0"'), "a drag keeps the cell's fill");
+	ok(w3.includes('data-b="tb"'), "and its borders");
+	eq(headerCellWidth(w3, 0), 120, "while taking the width");
+
+	// clearing unwraps only when nothing else is left on the span
+	eq(setHeaderCellWidth(w1, 1, null), H, "clearing the only attribute unwraps back to plain text");
+	const cleared = setHeaderCellWidth(w3, 0, null)!;
+	ok(cleared.includes("<span"), "clearing a width keeps a span that still carries a fill");
+	eq(headerCellWidth(cleared, 0), null, "but the width is gone");
+
+	// clamped the same way Power Tables clamps, so either can read the other's
+	eq(headerCellWidth(setHeaderCellWidth(H, 0, 5)!, 0), 48, "a width below the floor clamps up");
+	eq(headerCellWidth(setHeaderCellWidth(H, 0, 99999)!, 0), 1200, "and above the ceiling clamps down");
+
+	eq(setHeaderCellWidth(H, 9, 100), null, "a column that does not exist changes nothing");
+	eq(setHeaderCellWidth("plain text", 0, 100), null, "and neither does a line that is not a row");
+	eq(setHeaderCellWidth(H, 0, null), null, "clearing a width that was never set is a no-op");
 }
