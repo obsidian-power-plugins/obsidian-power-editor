@@ -419,7 +419,7 @@ export function findPlaceholderTags(md: string): PlaceholderTag[] {
 
 export function postCleanMarkdown(md: string): string {
 	const tidied = md
-		.replace(/ /g, " ")
+		.replace(/\u00A0/g, " ")
 		.replace(/[ \t]+$/gm, "")
 		.replace(/\n{3,}/g, "\n\n")
 		.trim();

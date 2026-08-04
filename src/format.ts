@@ -510,8 +510,8 @@ export function convertEmphasisInWrappers(text: string): { text: string; count: 
 		}
 		if (inFence || !line.includes("<")) return line;
 		return line
-			.replace(/(<mark[^>]*>)([\s\S]*?)(<\/mark>)/gi, (_m, o, i, c) => o + conv(i) + c)
-			.replace(/(<span style="color:[^"]*">)([\s\S]*?)(<\/span>)/gi, (_m, o, i, c) => o + conv(i) + c);
+			.replace(/(<mark[^>]*>)([\s\S]*?)(<\/mark>)/gi, (_m: string, o: string, i: string, c: string) => o + conv(i) + c)
+			.replace(/(<span style="color:[^"]*">)([\s\S]*?)(<\/span>)/gi, (_m: string, o: string, i: string, c: string) => o + conv(i) + c);
 	});
 	return { text: lines.join("\n"), count };
 }

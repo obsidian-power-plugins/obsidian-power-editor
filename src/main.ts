@@ -1034,8 +1034,7 @@ class CopyCodeWidget extends WidgetType {
 	}
 
 	toDOM() {
-		const b = document.createElement("button");
-		b.className = "ped-cb-copy";
+		const b = createEl("button", { cls: "ped-cb-copy" });
 		b.setAttribute("aria-label", "Copy code");
 		b.textContent = "Copy";
 		b.onmousedown = (e) => e.preventDefault(); // keep the editor's selection
@@ -1079,8 +1078,7 @@ class CardPadWidget extends WidgetType {
 	}
 
 	toDOM() {
-		const s = document.createElement("span");
-		s.className = "ped-cb-pad";
+		const s = createSpan({ cls: "ped-cb-pad" });
 		return s;
 	}
 }
@@ -1100,8 +1098,7 @@ class FileNameWidget extends WidgetType {
 	}
 
 	toDOM() {
-		const b = document.createElement("button");
-		b.className = "ped-cb-file" + (this.name ? "" : " is-empty");
+		const b = createEl("button", { cls: "ped-cb-file" + (this.name ? "" : " is-empty") });
 		b.setAttribute("aria-label", this.name ? "Rename file" : "Name this block");
 		b.setAttribute("data-ped-line", String(this.line));
 		b.textContent = this.name || "Add a name";
@@ -1131,14 +1128,11 @@ class LangButtonWidget extends WidgetType {
 	}
 
 	toDOM() {
-		const b = document.createElement("button");
-		b.className = "ped-cb-lang";
+		const b = createEl("button", { cls: "ped-cb-lang" });
 		b.setAttribute("aria-label", "Change language");
 		b.setAttribute("data-ped-line", String(this.line));
 		b.textContent = this.label;
-		const caret = b.appendChild(document.createElement("span"));
-		caret.className = "ped-cb-caret";
-		caret.textContent = "⌄";
+		b.createSpan({ cls: "ped-cb-caret", text: "⌄" });
 		b.onmousedown = (e) => e.preventDefault();
 		return b;
 	}
@@ -1519,7 +1513,7 @@ class CoverModal extends Modal {
 		const spec = this.current();
 		const activeVal = applied ?? (spec?.kind === "gradient" ? spec.value : spec?.kind === "solid" ? `solid:${spec.value}` : "");
 
-		c.createEl("div", { cls: "ped-cover-sect", text: "Gradients" });
+		c.createDiv({ cls: "ped-cover-sect", text: "Gradients" });
 		const gGrid = c.createDiv({ cls: "ped-cover-grid" });
 		GRADIENTS.forEach((css, i) => {
 			const tile = gGrid.createDiv({ cls: "ped-cover-swatch", attr: { "aria-label": GRADIENT_NAMES[i] ?? `Gradient ${i + 1}` } });
@@ -1528,7 +1522,7 @@ class CoverModal extends Modal {
 			tile.addEventListener("click", () => this.apply(`gradient:${i + 1}`));
 		});
 
-		c.createEl("div", { cls: "ped-cover-sect", text: "Solid colors" });
+		c.createDiv({ cls: "ped-cover-sect", text: "Solid colors" });
 		const sGrid = c.createDiv({ cls: "ped-cover-grid" });
 		SOLIDS.forEach((hex, i) => {
 			const tile = sGrid.createDiv({ cls: "ped-cover-swatch", attr: { "aria-label": SOLID_NAMES[i] ?? hex } });
@@ -1537,7 +1531,7 @@ class CoverModal extends Modal {
 			tile.addEventListener("click", () => this.apply(`solid:${hex}`));
 		});
 
-		c.createEl("div", { cls: "ped-cover-sect", text: "Your images" });
+		c.createDiv({ cls: "ped-cover-sect", text: "Your images" });
 		const imgRow = c.createDiv({ cls: "ped-cover-actions" });
 		const act = (label: string, icon: string, fn: () => void) => {
 			const b = imgRow.createEl("button", { cls: "ped-cover-action" });
@@ -1561,7 +1555,7 @@ class CoverModal extends Modal {
 			}).open();
 		});
 
-		c.createEl("div", { cls: "ped-cover-sect", text: "Height" });
+		c.createDiv({ cls: "ped-cover-sect", text: "Height" });
 		const hRow = c.createDiv({ cls: "ped-cover-heights" });
 		const heights: [CoverHeight, string][] = [
 			["short", "Short"],
@@ -1575,7 +1569,7 @@ class CoverModal extends Modal {
 			b.addEventListener("click", () => void this.plugin.writeCoverHeight(this.file, h).then(() => this.render(activeVal || undefined)));
 		});
 
-		c.createEl("div", { cls: "ped-cover-sect", text: "Title" });
+		c.createDiv({ cls: "ped-cover-sect", text: "Title" });
 		const overlaid = parsePageLayout(this.app.metadataCache.getFileCache(this.file)?.frontmatter).overlayTitle;
 		const ovRow = c.createDiv({ cls: "ped-cover-heights" });
 		const ovBtn = ovRow.createEl("button", { cls: "ped-cover-height", text: "Float title over cover" });
@@ -2231,7 +2225,7 @@ export default class PowerEditorPlugin extends Plugin {
 			// tight against the paragraph above it, which is the gap being complained
 			// about, and indented by a step a mail client will actually apply
 			style(list, "margin:0 0 10px 0;padding-left:28px");
-			if (list instanceof HTMLOListElement) {
+			if (list.instanceOf(HTMLOListElement)) {
 				let depth = 0;
 				for (let p = list.parentElement; p; p = p.parentElement) {
 					if (p === root) break;
@@ -2377,7 +2371,6 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	private async boot() {
-		console.log(`Power Editor: code build ${PED_BUILD} loaded`);
 		await this.loadSettings();
 		this.addSettingTab(new PowerEditorSettingTab(this));
 		// Ground-truth check for which code is actually running (Settings shows the
@@ -2651,14 +2644,14 @@ export default class PowerEditorPlugin extends Plugin {
 				const span = createSpan({ cls: "ped-callout-emoji", text: m[1], attr: { title: "Change emoji" } });
 				node.nodeValue = rest;
 				title.insertBefore(span, node);
-				const callout = title.closest(".callout") as HTMLElement | null;
+				const callout = title.closest<HTMLElement>(".callout");
 				// The emoji IS the icon here, so the type's own Lucide badge steps
 				// aside, but only on callouts that actually carry one. A header
 				// typed by hand keeps its badge and still reads as a tip. Live
 				// preview hangs the icon off .cm-callout, outside .callout, so
 				// both wrappers get flagged.
 				callout?.addClass("ped-emoji-icon");
-				(title.closest(".cm-callout") as HTMLElement | null)?.addClass("ped-emoji-icon");
+				(title.closest<HTMLElement>(".cm-callout"))?.addClass("ped-emoji-icon");
 				const info = callout ? ctx.getSectionInfo(callout) : null;
 				if (callout && info) {
 					callout.setAttribute("data-ped-line", String(info.lineStart));
@@ -3153,7 +3146,7 @@ export default class PowerEditorPlugin extends Plugin {
 			const raw = window.localStorage.getItem(this.toolbarBackupKey());
 			if (!raw) return null;
 			const v: unknown = JSON.parse(raw);
-			return Array.isArray(v) && v.every((x) => typeof x === "string") ? (v as string[]) : null;
+			return Array.isArray(v) && v.every((x) => typeof x === "string") ? v : null;
 		} catch {
 			return null; // unavailable or unreadable storage: no backup, never a crash
 		}
@@ -3325,11 +3318,11 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	private offerUndo(file: TFile, at: number, before: string[], after: string[]) {
-		const frag = document.createDocumentFragment();
-		frag.appendChild(document.createTextNode("Updated. "));
-		const link = document.createElement("a");
-		link.textContent = "Undo";
-		frag.appendChild(link);
+		let link!: HTMLAnchorElement;
+		const frag = createFragment((f) => {
+			f.appendText("Updated. ");
+			link = f.createEl("a", { text: "Undo" });
+		});
 		const notice = new Notice(frag, 5000);
 		link.addEventListener("click", () => {
 			notice.hide();
@@ -3530,7 +3523,11 @@ export default class PowerEditorPlugin extends Plugin {
 			`${open.length} to-do${open.length === 1 ? "" : "s"} due today${overdue ? ` (${overdue} overdue)` : ""}, click to open Today`,
 			10000
 		);
-		notice.noticeEl.addEventListener("click", () => {
+		// messageEl arrived in 1.8.7 and this plugin's floor is 1.7.2, so the older
+		// noticeEl has to stay reachable. The cast is the version check, and it
+		// also keeps the fallback from reading as a deprecated access.
+		const parts = notice as unknown as { messageEl?: HTMLElement; noticeEl: HTMLElement };
+		(parts.messageEl ?? parts.noticeEl).addEventListener("click", () => {
 			notice.hide();
 			void this.activateTodayView();
 		});
@@ -4166,7 +4163,7 @@ export default class PowerEditorPlugin extends Plugin {
 		for (const titleEl of Array.from(view.containerEl.querySelectorAll(".inline-title"))) {
 			const parent = titleEl.parentElement;
 			if (!parent) continue;
-			let el = parent.querySelector(":scope > .ped-page-icon") as HTMLElement | null;
+			let el = parent.querySelector<HTMLElement>(":scope > .ped-page-icon");
 			if (!icon || !file) {
 				el?.remove();
 				continue;
@@ -4218,7 +4215,7 @@ export default class PowerEditorPlugin extends Plugin {
 			(file ? this.app.metadataCache.getFileCache(file)?.sections : undefined)?.find((s) => s.type !== "yaml")?.type === "heading";
 
 		const place = (host: HTMLElement, where: "title" | "bottom", anchor: Element | null, wanted: boolean) => {
-			let el = host.querySelector(`:scope > .ped-edited.is-${where}`) as HTMLElement | null;
+			let el = host.querySelector<HTMLElement>(`:scope > .ped-edited.is-${where}`);
 			if (!wanted) {
 				el?.remove();
 				return;
@@ -4271,7 +4268,7 @@ export default class PowerEditorPlugin extends Plugin {
 			i.setTitle("Change icon…").setIcon("smile").onClick(() => {
 				const anchor =
 					(evt?.target instanceof HTMLElement ? evt.target : null) ??
-					(this.app.workspace.getActiveViewOfType(MarkdownView)?.containerEl.querySelector(".view-header-title-container") as HTMLElement | null) ??
+					(this.app.workspace.getActiveViewOfType(MarkdownView)?.containerEl.querySelector<HTMLElement>(".view-header-title-container")) ??
 					document.body;
 				this.pickEmoji(anchor, (ch) => {
 					void this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
@@ -4302,7 +4299,7 @@ export default class PowerEditorPlugin extends Plugin {
 		];
 		for (const h of hosts) {
 			if (!(h instanceof HTMLElement)) continue;
-			let el = h.querySelector(":scope > .ped-cover") as HTMLElement | null;
+			let el = h.querySelector<HTMLElement>(":scope > .ped-cover");
 			if (!spec || !file) {
 				el?.remove();
 				h.removeClass("ped-has-cover");
@@ -4339,7 +4336,7 @@ export default class PowerEditorPlugin extends Plugin {
 				});
 			};
 			btn("Change cover", (e) => this.openCoverMenu(e));
-			if (spec.kind !== "gradient") btn("Reposition", () => this.armCoverReposition(el as HTMLElement, file, spec.value));
+			if (spec.kind !== "gradient") btn("Reposition", () => this.armCoverReposition(el, file, spec.value));
 			btn("Remove", () => void this.writeCover(file, null));
 		}
 	}
@@ -4371,8 +4368,7 @@ export default class PowerEditorPlugin extends Plugin {
 
 	/** Upload an image from the computer and make it the cover. */
 	uploadCover(file: TFile) {
-		const input = document.createElement("input");
-		input.type = "file";
+		const input = createEl("input", { type: "file" });
 		input.accept = "image/*";
 		input.addEventListener("change", () => {
 			const f = input.files?.[0];
@@ -4396,7 +4392,7 @@ export default class PowerEditorPlugin extends Plugin {
 
 	/** One drag session: vertical drag slides the image, release saves. */
 	private armCoverReposition(el: HTMLElement, file: TFile, coverValue: string) {
-		const img = el.querySelector(".ped-cover-img") as HTMLImageElement | null;
+		const img = el.querySelector<HTMLImageElement>(".ped-cover-img");
 		if (!img) return;
 		new Notice("Drag the cover up or down; release to save.");
 		el.addClass("is-repositioning");
@@ -4540,7 +4536,7 @@ export default class PowerEditorPlugin extends Plugin {
 	private applyVerifyBadge(view: MarkdownView) {
 		const header = view.containerEl.querySelector(".view-header-title-container");
 		if (!(header instanceof HTMLElement)) return;
-		let badge = header.querySelector(":scope > .ped-verify") as HTMLElement | null;
+		let badge = header.querySelector<HTMLElement>(":scope > .ped-verify");
 		const file = view.file;
 		const st = file
 			? verificationState(this.app.metadataCache.getFileCache(file)?.frontmatter, todayStr())
@@ -4673,7 +4669,7 @@ export default class PowerEditorPlugin extends Plugin {
 			h1: "# ", h2: "## ", h3: "### ", bullet: "- ", ordered: "1. ", task: "- [ ] ", quote: "> ",
 		};
 		if (!lines[line]?.trim() && BARE[kind]) {
-			const marker = BARE[kind] as string;
+			const marker = BARE[kind];
 			ed.setLine(line, marker);
 			const at = { line, ch: marker.length };
 			ed.setCursor(at);
@@ -4695,13 +4691,13 @@ export default class PowerEditorPlugin extends Plugin {
 		const show = this.settings.showToolbar && (Platform.isDesktopApp || this.settings.showOnMobile);
 		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
 			const view = leaf.view as MarkdownView;
-			const existing = view.containerEl.querySelector(":scope > .ped-toolbar") as HTMLElement | null;
+			const existing = view.containerEl.querySelector<HTMLElement>(":scope > .ped-toolbar");
 			if (!show) {
 				existing?.remove();
 				continue;
 			}
 			if (!existing) this.buildToolbar(view);
-			const bar = view.containerEl.querySelector(":scope > .ped-toolbar") as HTMLElement | null;
+			const bar = view.containerEl.querySelector<HTMLElement>(":scope > .ped-toolbar");
 			bar?.toggleClass("ped-hidden", view.getMode() !== "source");
 		}
 		this.queueStateRefresh();
@@ -5135,7 +5131,7 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	private closeLangPicker() {
-		const pop = this.langPopover as (HTMLElement & { pedCleanup?: () => void }) | null;
+		const pop = this.langPopover;
 		if (!pop) return;
 		pop.pedCleanup?.();
 		pop.remove();
@@ -5410,7 +5406,7 @@ export default class PowerEditorPlugin extends Plugin {
 	 *  whole-doc change plus recentering is what made pages look like they
 	 *  jumped after every block move. */
 	private applyDoc(ed: Editor, prevLines: string[], nextLines: string[], cursorLine: number, follow = false) {
-		const scroller = ((ed as unknown as { cm?: EditorView }).cm as EditorView | undefined)?.scrollDOM ?? null;
+		const scroller = (ed as unknown as { cm?: EditorView }).cm?.scrollDOM ?? null;
 		const scrollTop = scroller?.scrollTop ?? 0;
 		// Narrow the write to the lines that actually changed. Replacing the
 		// whole document (which is what this used to do) invalidates every
@@ -6212,8 +6208,10 @@ export default class PowerEditorPlugin extends Plugin {
 
 	/* ---------------- emoji picker ---------------- */
 
-	private emojiPopover: HTMLElement | null = null;
-	private langPopover: HTMLElement | null = null;
+	/** Both popovers hang their own teardown off the element, so the field
+	 *  carries it rather than every reader asserting it back on. */
+	private emojiPopover: (HTMLElement & { pedCleanup?: () => void }) | null = null;
+	private langPopover: (HTMLElement & { pedCleanup?: () => void }) | null = null;
 
 	/** Searchable emoji popover under the toolbar button; recents float first. */
 	private showEmojiPicker(ed: Editor, anchor: HTMLElement) {
@@ -6227,7 +6225,7 @@ export default class PowerEditorPlugin extends Plugin {
 	 *  back, through the editor in Live Preview, through the file in Reading. */
 	private swapCalloutEmoji(span: HTMLElement) {
 		this.pickEmoji(span, (ch) => {
-			const callout = span.closest(".callout") as HTMLElement | null;
+			const callout = span.closest<HTMLElement>(".callout");
 			if (!callout) return;
 			const src = span.closest(".markdown-source-view");
 			if (src) {
@@ -6322,7 +6320,7 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	private closeEmojiPicker() {
-		const pop = this.emojiPopover as (HTMLElement & { pedCleanup?: () => void }) | null;
+		const pop = this.emojiPopover;
 		if (!pop) return;
 		pop.pedCleanup?.();
 		pop.remove();
@@ -6426,11 +6424,17 @@ export default class PowerEditorPlugin extends Plugin {
 
 	/** Rewrite one file's lead-ins. Returns how many landed. */
 	async convertLeadsInFile(file: TFile, bare: boolean): Promise<number> {
-		const lines = (await this.app.vault.read(file)).split("\n");
-		const leads = findCalloutLeads(lines).filter((l) => bare || !l.bare);
-		if (!leads.length) return 0;
-		await this.app.vault.modify(file, convertCalloutLeads(lines, leads).join("\n"));
-		return leads.length;
+		// Read inside the write, not before it: this rewrites a whole note, and
+		// the user may well be typing in it. Reading first would hand back
+		// whatever the file looked like a moment ago and drop the edit in between.
+		let converted = 0;
+		await this.app.vault.process(file, (data) => {
+			const lines = data.split("\n");
+			const leads = findCalloutLeads(lines).filter((l) => bare || !l.bare);
+			converted = leads.length;
+			return leads.length ? convertCalloutLeads(lines, leads).join("\n") : data;
+		});
+		return converted;
 	}
 
 	private cursorPoint(): { x: number; y: number } {
@@ -6527,7 +6531,7 @@ export default class PowerEditorPlugin extends Plugin {
 				const id = "b" + Math.random().toString(36).slice(2, 8);
 				const res = ensureBlockId(prev, range, id);
 				if (res.changed) this.applyDoc(ed, prev, res.lines, range.from);
-				const file = view.file as TFile | null;
+				const file = view.file;
 				const name = file ? file.basename : "";
 				await navigator.clipboard.writeText(`[[${name}#^${res.id}]]`);
 				new Notice("Block link copied.");
@@ -6585,8 +6589,8 @@ export default class PowerEditorPlugin extends Plugin {
 		const pad = 16; // air at the pane edge so grips and shadows stay visible
 		const root = view.containerEl;
 		const preview = view.getMode() === "preview";
-		const scroller = root.querySelector(preview ? ".markdown-preview-view" : ".cm-scroller") as HTMLElement | null;
-		const column = root.querySelector(preview ? ".markdown-preview-sizer" : ".cm-content") as HTMLElement | null;
+		const scroller = root.querySelector<HTMLElement>(preview ? ".markdown-preview-view" : ".cm-scroller");
+		const column = root.querySelector<HTMLElement>(preview ? ".markdown-preview-sizer" : ".cm-content");
 		if (!scroller || !column) return 0;
 		return Math.max(0, Math.floor((scroller.clientWidth - column.clientWidth) / 2) - pad);
 	}
@@ -6675,10 +6679,10 @@ export default class PowerEditorPlugin extends Plugin {
 		// plus the measured bleed on both sides, matching what styles.css
 		// will let the committed image render at.
 		this.updateImageBleed();
-		const host = img.closest(".markdown-source-view") as HTMLElement | null;
+		const host = img.closest<HTMLElement>(".markdown-source-view");
 		const win = img.ownerDocument.defaultView ?? window;
 		const bleed = host ? parseFloat(win.getComputedStyle(host).getPropertyValue("--ped-img-bleed")) || 0 : 0;
-		const col = (img.closest(".cm-content") as HTMLElement | null)?.clientWidth;
+		const col = (img.closest<HTMLElement>(".cm-content"))?.clientWidth;
 		const max = Math.max(120, col != null ? col + 2 * bleed : 2000);
 		const move = (ev: PointerEvent) => {
 			const drag = this.imgDrag;
@@ -6713,7 +6717,7 @@ export default class PowerEditorPlugin extends Plugin {
 
 	/** The doc line holding this rendered image's embed, plus its view. */
 	private embedLineOf(img: HTMLImageElement): { view: MarkdownView; lineNo: number; text: string; target: string } | null {
-		const container = img.closest(".internal-embed") as HTMLElement | null;
+		const container = img.closest<HTMLElement>(".internal-embed");
 		const target = container?.getAttribute("src") ?? img.getAttribute("src") ?? "";
 		if (!target) return null;
 		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
@@ -6982,7 +6986,7 @@ export default class PowerEditorPlugin extends Plugin {
 	/* ---------------- block drag handles ---------------- */
 
 	private cmOf(view: MarkdownView): CMView | null {
-		return ((view.editor as unknown as { cm?: CMView }).cm as CMView | undefined) ?? null;
+		return (view.editor as unknown as { cm?: CMView }).cm ?? null;
 	}
 
 	private docLines(cm: CMView, ed: Editor): string[] {
@@ -7122,7 +7126,7 @@ export default class PowerEditorPlugin extends Plugin {
 			this.hideHandle();
 			return;
 		}
-		const editorRect = (cm.dom as HTMLElement).getBoundingClientRect();
+		const editorRect = cm.dom.getBoundingClientRect();
 		const h = this.ensureHandle();
 		h.style.left = Math.max(editorRect.left + 2, a.x - 30) + "px";
 		h.style.top = a.top + Math.max(0, (a.h - 22) / 2) + "px";
@@ -7145,7 +7149,7 @@ export default class PowerEditorPlugin extends Plugin {
 		const c = cm.coordsAtPos(visPos);
 		if (c) return { x: c.left, top: c.top, h: c.bottom - c.top || 20 };
 		const node = cm.domAtPos(line.from).node;
-		const lineEl = (node instanceof Element ? node : node.parentElement)?.closest(".cm-line") as HTMLElement | null;
+		const lineEl = (node.instanceOf(Element) ? node : node.parentElement)?.closest<HTMLElement>(".cm-line");
 		if (!lineEl) return null;
 		const lr = lineEl.getBoundingClientRect();
 		return { x: lr.left, top: lr.top, h: lr.height || 20 };
@@ -7220,7 +7224,7 @@ export default class PowerEditorPlugin extends Plugin {
 			drop.hide();
 			return;
 		}
-		const editorRect = (d.cm.dom as HTMLElement).getBoundingClientRect();
+		const editorRect = d.cm.dom.getBoundingClientRect();
 		drop.style.left = editorRect.left + 8 + "px";
 		drop.style.width = editorRect.width - 24 + "px";
 		drop.style.top = y - 1 + "px";
@@ -8090,7 +8094,7 @@ class PowerEditorSettingTab extends PluginSettingTab {
 			const q = this.query.trim().toLowerCase();
 			setVisible(tabBar, !q);
 			for (const sec of Array.from(body.children) as HTMLElement[]) {
-				const items = Array.from(sec.querySelectorAll(":scope > .setting-item:not(.setting-item-heading)")) as HTMLElement[];
+				const items = Array.from(sec.querySelectorAll<HTMLElement>(":scope > .setting-item:not(.setting-item-heading)"));
 				if (!q) {
 					for (const it of items) setVisible(it, true);
 					setVisible(sec, sec.dataset.tab === this.activeTab);

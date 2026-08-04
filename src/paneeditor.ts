@@ -89,7 +89,7 @@ export function createPaneEditor(app: App, container: HTMLElement, opts: PaneEdi
 		paneOwners.add(owner);
 
 		// subclass so document changes surface without polling
-		const PaneClass = class extends (EditorClass as new (...args: unknown[]) => Record<string, unknown>) {
+		const PaneClass = class extends EditorClass {
 			onUpdate(update: unknown, changed: boolean) {
 				const base = (Object.getPrototypeOf(Object.getPrototypeOf(this)) as Record<string, unknown>)["onUpdate"];
 				if (typeof base === "function") (base as (u: unknown, c: boolean) => void).call(this, update, changed);
@@ -108,7 +108,7 @@ export function createPaneEditor(app: App, container: HTMLElement, opts: PaneEdi
 
 		const cm =
 			(ed["cm"] as EditorView | undefined) ??
-			((ed["editor"] as { cm?: EditorView } | undefined)?.cm as EditorView | undefined);
+			(ed["editor"] as { cm?: EditorView } | undefined)?.cm;
 		if (!cm) {
 			(ed["destroy"] as (() => void) | undefined)?.call(ed);
 			container.empty();

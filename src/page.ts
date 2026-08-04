@@ -24,7 +24,7 @@ export function parseCover(fm: Record<string, unknown> | undefined): CoverSpec |
 	const value = raw.trim();
 	const yRaw = fm?.["cover-y"];
 	const y = Math.max(0, Math.min(100, typeof yRaw === "number" ? yRaw : 50));
-	const hRaw = typeof fm?.["cover-h"] === "string" ? (fm["cover-h"] as string).trim().toLowerCase() : "";
+	const hRaw = typeof fm?.["cover-h"] === "string" ? fm["cover-h"].trim().toLowerCase() : "";
 	const height: CoverHeight = hRaw === "short" || hRaw === "tall" ? hRaw : "standard";
 	if (/^gradient:\d+$/.test(value)) return { kind: "gradient", value, y, height };
 	const solid = value.match(/^solid:(.+)$/i);
@@ -103,7 +103,7 @@ export interface PageLayout {
  *  (serif / monospace), and `cover-overlay`. */
 export function parsePageLayout(fm: Record<string, unknown> | undefined): PageLayout {
 	const flag = (v: unknown) => v === true || v === "true";
-	const f = typeof fm?.["font"] === "string" ? (fm["font"] as string).trim().toLowerCase() : "";
+	const f = typeof fm?.["font"] === "string" ? fm["font"].trim().toLowerCase() : "";
 	const font = f === "serif" ? "serif" : f === "mono" || f === "monospace" ? "mono" : null;
 	return { fullWidth: flag(fm?.["full-width"]), font, overlayTitle: flag(fm?.["cover-overlay"]) };
 }
@@ -225,7 +225,7 @@ export function editedAt(fm: Record<string, unknown> | undefined, mtime: number)
 	for (const key of ["updated", "modified", "last-edited"]) {
 		const v = fm?.[key];
 		if (typeof v === "string" || typeof v === "number") {
-			const t = new Date(v as string).getTime();
+			const t = new Date(v).getTime();
 			if (Number.isFinite(t) && t > 0) return t;
 		}
 	}
