@@ -90,13 +90,29 @@ With **Readable line length** on, a sized image is not stuck at the text column:
 
 The table button opens a Word-style grid, sweep to the size you want (up to 8 × 6) and click. Power Tables takes over from there if you want sorting, filters, colors, and totals.
 
+**Column widths**: hover a column boundary in the header row and drag. The band is grabbable from either side of the divider, the cursor changes, and the edge that will move is highlighted. Widths are written into the note on the header cell, so they travel with the file and degrade to plain text anywhere the plugin is not installed.
+
+This one **stands down when Power Tables is installed**, which owns table cells and does the same job with auto-fit, a reset command and its own right-click menu. Two plugins listening for drags on the same header cells would fight over every one of them. The widths written here use Power Tables' own encoding, so installing it later finds your columns already sized rather than a second set it cannot read. Editing a width is done in place, so a header cell that already carries a fill or borders keeps them. Live Preview only, since the width has to be written back into the document and a Reading-view table has no editor to write through.
+
 ## Dictate
 
 Click the mic, talk, click again, your words land at the cursor as a block of text. Point it at any OpenAI-compatible transcription endpoint in settings (Groq, OpenAI, or a self-hosted Whisper server on your own machine, which needs no key). If Power Assistant is installed and you leave those fields empty, dictation borrows its endpoint and key, so a vault running both configures transcription once. Right-click the mic (or use settings) to choose how it lands: **raw transcript**, **tidied prose** (filler words and false starts removed), or **bullet points**, the tidy modes use the AI key and fall back to raw if anything fails.
 
 ## Format painter
 
-Select formatted text, click the paintbrush, then select the text to paint, the captured combination (bold/italic/underline/strike/highlight/color) is applied in one go. Click paints once, double-click keeps painting, Escape disarms.
+Select formatted text, click the paintbrush, then select the text to paint, the captured combination (bold/italic/underline/strike/highlight/color) is applied in one go.
+
+The brush **cycles through three states**, so the sticky mode is something you find rather than something you have to be told about:
+
+| Click | State | What happens |
+| --- | --- | --- |
+| once | **armed** (brush lights up) | the next selection takes the look, then the brush lets go |
+| twice | **locked** (brush gains a ring) | every selection takes it, until you stop |
+| again | off | the brush lets go |
+
+**Escape** stops it from either state, as does clicking the brush. Coming from Word or Excel, a double-click still goes straight to locked, because two clicks land there anyway.
+
+**Copying unformatted text is a normal thing to do**: the brush then holds "no formatting", and painting strips bold, italic, highlight and colors off whatever you select next. That is how a few scattered bits of stray markup get tidied without hunting each one down.
 
 ## Emoji & find
 
