@@ -581,7 +581,7 @@ interface PowerEditorSettings {
 	/** The quick-capture mobile toolbar (legacy key name, kept so saved settings survive). */
 	onenoteMobileToolbar: boolean;
 	/** The user's own mobile toolbar arrangement, restored on toggle-off.
-	 *  Superseded by the localStorage copy (see TOOLBAR_BACKUP_KEY): this key
+	 *  Superseded by the device-local copy (see TOOLBAR_BACKUP_KEY): this key
 	 *  stays so a device that saved one here before still restores it, and so
 	 *  turning the toolbar off clears it. Nothing writes it any more. */
 	mobileToolbarBackup: string[] | null;
@@ -686,6 +686,9 @@ const COMMENTS_VIEW = "ped-comments-view";
 // 1.54.0 at 1.58.1, which is exactly the answer it exists to rule out.
 declare const __PED_BUILD__: string;
 const PED_BUILD = __PED_BUILD__;
+
+/** Obsidian namespaces this by vault, so the key needs no vault of its own. */
+const TOOLBAR_BACKUP_KEY = "ped-mobile-toolbar-backup";
 
 /** Every toolbar button, for the visibility settings. */
 const BUTTON_IDS: [string, string][] = [
@@ -3126,7 +3129,8 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	/**
-	 * The toolbar backup lives in localStorage, not in settings.
+	 * The toolbar backup lives in Obsidian's own device-local store, not in
+	 * settings.
 	 *
 	 * It used to be saved with the settings, which meant a phone wrote its
 	 * data.json seconds into its FIRST launch, before any setting had been
@@ -3136,20 +3140,24 @@ export default class PowerEditorPlugin extends Plugin {
 	 * describes this device's own toolbar, is meaningless on any other, and
 	 * is not something the fleet should agree on.
 	 *
-	 * Keyed by vault so two vaults on one phone keep their own, and read
-	 * through the legacy settings key first so a device that saved one there
-	 * still restores it.
+	 * saveLocalStorage keys by vault for us, so two vaults on one phone keep
+	 * their own, and the legacy settings key is read first so a device that
+	 * saved one there still restores it.
 	 */
-	private toolbarBackupKey(): string {
-		return `ped-mobile-toolbar-backup:${this.app.vault.getName()}`;
+	/** The pair arrived in 1.8.7 and this plugin's floor is 1.7.2, so they are
+	 *  reached optionally rather than named: on an older app the backup simply
+	 *  does not exist, which the callers already treat as "no backup". */
+	private localStore() {
+		return this.app as unknown as {
+			loadLocalStorage?: (k: string) => unknown;
+			saveLocalStorage?: (k: string, v: unknown) => void;
+		};
 	}
 
 	private readToolbarBackup(): string[] | null {
 		if (this.settings.mobileToolbarBackup) return this.settings.mobileToolbarBackup;
 		try {
-			const raw = window.localStorage.getItem(this.toolbarBackupKey());
-			if (!raw) return null;
-			const v: unknown = JSON.parse(raw);
+			const v: unknown = this.localStore().loadLocalStorage?.(TOOLBAR_BACKUP_KEY);
 			return Array.isArray(v) && v.every((x) => typeof x === "string") ? v : null;
 		} catch {
 			return null; // unavailable or unreadable storage: no backup, never a crash
@@ -3158,8 +3166,7 @@ export default class PowerEditorPlugin extends Plugin {
 
 	private writeToolbarBackup(list: string[] | null) {
 		try {
-			if (list) window.localStorage.setItem(this.toolbarBackupKey(), JSON.stringify(list));
-			else window.localStorage.removeItem(this.toolbarBackupKey());
+			this.localStore().saveLocalStorage?.(TOOLBAR_BACKUP_KEY, list);
 		} catch {
 			/* storage full or blocked: the swap still works, only the undo is lost */
 		}

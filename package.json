@@ -1,6 +1,6 @@
 {
 	"name": "powereditor",
-	"version": "1.58.3",
+	"version": "1.59.0",
 	"description": "Obsidian plugin: format any note from a toolbar, selection bubble, or slash menu, with everything staying plain Markdown",
 	"main": "main.js",
 	"type": "module",
@@ -12,16 +12,16 @@
 		"predeploy": "node predeploy.mjs"
 	},
 	"dependencies": {
-		"@anthropic-ai/sdk": "^0.110.0"
+		"@anthropic-ai/sdk": "0.110.0"
 	},
 	"devDependencies": {
-		"@codemirror/language": "^6.10.0",
-		"@codemirror/state": "^6.4.1",
-		"@codemirror/view": "^6.26.3",
-		"@types/node": "^20.14.0",
-		"esbuild": "^0.21.5",
-		"obsidian": "latest",
-		"tslib": "^2.6.3",
-		"typescript": "^5.5.3"
+		"@codemirror/language": "6.12.4",
+		"@codemirror/state": "6.7.1",
+		"@codemirror/view": "6.43.6",
+		"@types/node": "20.19.43",
+		"esbuild": "0.21.5",
+		"obsidian": "1.13.1",
+		"tslib": "2.8.1",
+		"typescript": "5.9.3"
 	}
 }
