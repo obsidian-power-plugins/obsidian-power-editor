@@ -111,10 +111,19 @@ body.is-mobile .ped-toolbar {
 	pointer-events: none;
 }
 
-body.ped-dragging,
-body.ped-dragging * {
-	cursor: grabbing !important;
-	user-select: none !important;
+/* While a block is being dragged the grab cursor has to win over whatever the
+   element under the pointer asks for: a link's pointer, the editor's text
+   caret, a button's own cursor. This used to carry an override flag; it wins on
+   specificity now, which is what the directory review asks for. Repeating the
+   class is the cheap way to buy weight without inventing a selector that
+   matches something else: with html and body that comes to (0,3,2), past
+   anything a theme reaches for on a single element. An inline cursor would
+   still beat it, and one exists on the resize grips, where it is the same
+   cursor anyway. */
+html body.ped-dragging.ped-dragging.ped-dragging,
+html body.ped-dragging.ped-dragging.ped-dragging * {
+	cursor: grabbing;
+	user-select: none;
 }
 
 /* ---------- the selection bubble ---------- */
@@ -420,10 +429,12 @@ body.ped-wys .ped-heading-ph::after {
 	pointer-events: none;
 }
 
-body.ped-imgresizing,
-body.ped-imgresizing * {
-	cursor: var(--ped-resize-cursor, nwse-resize) !important;
-	user-select: none !important;
+/* Same trick, same reason: the resize cursor has to hold across every element
+   the pointer crosses while the image is being sized. */
+html body.ped-imgresizing.ped-imgresizing.ped-imgresizing,
+html body.ped-imgresizing.ped-imgresizing.ped-imgresizing * {
+	cursor: var(--ped-resize-cursor, nwse-resize);
+	user-select: none;
 }
 
 /* ---------- wide images (a sized image may pass the readable column) ---------- */
