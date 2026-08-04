@@ -2,9 +2,9 @@
 
 A rich formatting toolbar, a TipTap-style selection bubble, **block drag handles**, a true **WYSIWYG mode**, **dictation**, and **image resize handles** on every note, built on Obsidian's own editor, so notes stay plain Markdown and every other plugin (including Power Tables) keeps working.
 
-[![Buy me a coffee](https://cdn.buymeacoffee.com/buttons/default-yellow.png)](https://buymeacoffee.com/powerplugins)
-
 ![A note in editing view with the formatting toolbar across the top, a rendered callout with a drag handle beside it, nested and numbered lists, checkboxes, and a syntax-highlighted TypeScript block with line numbers](docs/images/power-editor.png)
+
+[![Buy me a coffee](docs/images/buy-me-a-coffee.png)](https://buymeacoffee.com/powerplugins)
 
 The toolbar sits above the note and its buttons track the cursor, so the list
 button is lit while the cursor is in a list. Markers stay hidden while the text
