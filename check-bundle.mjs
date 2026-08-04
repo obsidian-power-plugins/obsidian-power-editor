@@ -53,3 +53,29 @@ if (strings > 0) {
 } else {
 	console.log("  bundle check: no lookbehind");
 }
+
+// The version stamp has to have actually landed. PED_BUILD is the one thing that
+// says which code is running, and esbuild's define only rewrites a free
+// identifier, so losing the define, or shadowing the name, leaves __PED_BUILD__
+// in the bundle and the plugin dies at load on a bare ReferenceError. Same deal
+// as above: prove the build setting is still doing its job.
+const version = JSON.parse(readFileSync("manifest.json", "utf8")).version;
+
+if (bundle.includes("__PED_BUILD__")) {
+	console.error(
+		"\n  main.js still refers to __PED_BUILD__ instead of a version string.\n" +
+			"  The plugin will throw the moment Obsidian loads it.\n" +
+			"  Check that esbuild.config.mjs still sets define: { __PED_BUILD__: ... }.\n",
+	);
+	process.exit(1);
+}
+
+if (!new RegExp(`["']${version.replace(/\./g, "\\.")}["']`).test(bundle)) {
+	console.error(
+		`\n  main.js does not contain the manifest version ${version}.\n` +
+			"  The build stamp is not reaching the bundle, so PED_BUILD cannot be trusted.\n",
+	);
+	process.exit(1);
+}
+
+console.log(`  bundle check: build stamp ${version}`);

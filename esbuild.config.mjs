@@ -1,7 +1,10 @@
 import esbuild from "esbuild";
+import { readFileSync } from "fs";
 import process from "process";
 
 const prod = process.argv[2] === "production";
+
+const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
 
 const ctx = await esbuild.context({
 	entryPoints: ["src/main.ts"],
@@ -9,6 +12,10 @@ const ctx = await esbuild.context({
 	external: ["obsidian", "electron", "@codemirror/*", "@lezer/*", "node:*"],
 	format: "cjs",
 	target: "es2020",
+	// Stamp the manifest version into the bundle so PED_BUILD identifies the
+	// code that is actually loaded. It used to be hand-typed in main.ts, which
+	// drifted, because a release only bumps the three JSON files.
+	define: { __PED_BUILD__: JSON.stringify(manifest.version) },
 	// Lookbehind is a *parse*-time error on Safari below 16.4, so a single
 	// literal anywhere in the bundle stops the whole plugin from loading on
 	// older iOS. Our own source has none, but dependencies do. Declaring the

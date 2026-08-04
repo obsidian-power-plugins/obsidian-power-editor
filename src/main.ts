@@ -679,9 +679,13 @@ const MOBILE_TOOLBAR = [
 
 const TODAY_VIEW = "ped-today";
 const COMMENTS_VIEW = "ped-comments-view";
-// Hardcoded so it reflects the RUNNING code, not the on-disk manifest (which a
-// stale/cached plugin module would still report as current). Bump every build.
-const PED_BUILD = "1.54.0";
+// Stamped in at build time by esbuild, from manifest.json, so it reflects the
+// RUNNING code and not the on-disk manifest (which a stale or cached plugin
+// module would still read as current). It used to be typed here by hand and
+// drifted, because a release bump only touches the JSON files: it still said
+// 1.54.0 at 1.58.1, which is exactly the answer it exists to rule out.
+declare const __PED_BUILD__: string;
+const PED_BUILD = __PED_BUILD__;
 
 /** Every toolbar button, for the visibility settings. */
 const BUTTON_IDS: [string, string][] = [
