@@ -3352,8 +3352,7 @@ export default class PowerEditorPlugin extends Plugin {
 		document.body.removeClass("ped-lh-compact");
 		document.body.removeClass("ped-lh-relaxed");
 		document.body.removeClass("ped-imgresizing");
-		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-			const view = leaf.view as MarkdownView;
+		for (const view of this.markdownViews()) {
 			this.bars.get(view)?.handOff?.disconnect();
 			view.containerEl.querySelector(":scope > .ped-toolbar")?.remove();
 		}
@@ -3488,8 +3487,7 @@ export default class PowerEditorPlugin extends Plugin {
 			});
 			return;
 		}
-		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-			const view = leaf.view as MarkdownView;
+		for (const view of this.markdownViews()) {
 			if (!view.containerEl.contains(target)) continue;
 			const cm = (
 				view.editor as unknown as {
@@ -4383,8 +4381,7 @@ export default class PowerEditorPlugin extends Plugin {
 	/** Re-sync every markdown view's cover, page icon, verify badge, and the
 	 *  per-note page layout (width, font, cover overlay). */
 	updatePageChrome() {
-		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-			const view = leaf.view as MarkdownView;
+		for (const view of this.markdownViews()) {
 			this.applyCover(view);
 			this.applyPageIcon(view);
 			this.applyVerifyBadge(view);
@@ -4560,7 +4557,7 @@ export default class PowerEditorPlugin extends Plugin {
 	 *  minute tick should not churn the rest of the page chrome. */
 	private refreshEditedStamps() {
 		if (this.settings.showEdited === "off") return;
-		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) this.applyEditedStamp(leaf.view as MarkdownView);
+		for (const view of this.markdownViews()) this.applyEditedStamp(view);
 	}
 
 	openIconMenu(evt: MouseEvent | undefined, file: TFile) {
@@ -4896,9 +4893,9 @@ export default class PowerEditorPlugin extends Plugin {
 
 	/** Tear down and re-create every toolbar (settings changes). */
 	rebuildToolbars() {
-		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-			this.bars.get(leaf.view as MarkdownView)?.handOff?.disconnect();
-			(leaf.view as MarkdownView).containerEl.querySelector(":scope > .ped-toolbar")?.remove();
+		for (const view of this.markdownViews()) {
+			this.bars.get(view)?.handOff?.disconnect();
+			view.containerEl.querySelector(":scope > .ped-toolbar")?.remove();
 		}
 		this.ensureToolbars();
 	}
@@ -4992,10 +4989,23 @@ export default class PowerEditorPlugin extends Plugin {
 		ed.setCursor({ line: range.from, ch: l.length });
 	}
 
+	/** Every open markdown view that actually exists yet.
+	 *
+	 *  Obsidian defers a tab's view until the tab is first shown: leaf.view is
+	 *  a placeholder that answers to containerEl and to nothing else, so the
+	 *  cast to MarkdownView every loop here used to satisfy the compiler and
+	 *  then threw on the first real question asked of it. One restored tab
+	 *  nobody had clicked was enough to break image resizing for the whole
+	 *  session. A placeholder is dropped rather than guessed at: nothing this
+	 *  plugin does to a view means anything before the view is there, and the
+	 *  work runs again when the tab opens. */
+	private markdownViews(): MarkdownView[] {
+		return this.app.workspace.getLeavesOfType("markdown").flatMap((leaf) => (leaf.view instanceof MarkdownView ? [leaf.view] : []));
+	}
+
 	private ensureToolbars() {
 		const show = this.settings.showToolbar && (Platform.isDesktopApp || this.settings.showOnMobile);
-		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-			const view = leaf.view as MarkdownView;
+		for (const view of this.markdownViews()) {
 			const existing = view.containerEl.querySelector<HTMLElement>(":scope > .ped-toolbar");
 			if (!show) {
 				existing?.remove();
@@ -5923,8 +5933,8 @@ export default class PowerEditorPlugin extends Plugin {
 			el?.toggleClass("is-active", mode !== "off");
 			el?.toggleClass("ped-painter-locked", mode === "locked");
 		};
-		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-			mark(this.bars.get(leaf.view as MarkdownView)?.buttons.get("painter"));
+		for (const view of this.markdownViews()) {
+			mark(this.bars.get(view)?.buttons.get("painter"));
 		}
 		mark(this.bubbleButtons.get("painter"));
 	}
@@ -6021,8 +6031,8 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	private setRecording(on: boolean) {
-		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-			this.bars.get(leaf.view as MarkdownView)?.buttons.get("dictate")?.toggleClass("is-recording", on);
+		for (const view of this.markdownViews()) {
+			this.bars.get(view)?.buttons.get("dictate")?.toggleClass("is-recording", on);
 		}
 	}
 
@@ -6581,8 +6591,7 @@ export default class PowerEditorPlugin extends Plugin {
 			if (!callout) return;
 			const src = span.closest(".markdown-source-view");
 			if (src) {
-				for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-					const view = leaf.view as MarkdownView;
+				for (const view of this.markdownViews()) {
 					if (!view.containerEl.contains(span)) continue;
 					const cm = this.cmOf(view);
 					if (!cm) return;
@@ -6952,8 +6961,7 @@ export default class PowerEditorPlugin extends Plugin {
 	 *  pane. Unmeasured contexts (hover popovers, PDF export) default to 0
 	 *  and keep the fit-to-column cap. */
 	private updateImageBleed() {
-		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-			const view = leaf.view as MarkdownView;
+		for (const view of this.markdownViews()) {
 			view.containerEl.style.setProperty("--ped-img-bleed", this.imageBleed(view) + "px");
 			this.stampImageWidths(view.containerEl);
 		}
@@ -7045,21 +7053,26 @@ export default class PowerEditorPlugin extends Plugin {
 		if (!img) return;
 		e.preventDefault();
 		e.stopPropagation();
-		const startW = img.getBoundingClientRect().width;
-		this.imgDrag = { img, startW, startX: e.clientX, dir };
-		document.body.addClass("ped-imgresizing");
-		document.body.style.setProperty("--ped-resize-cursor", cursor);
-		if (!this.imgBadge) this.imgBadge = document.body.createDiv({ cls: "ped-imgbadge" });
-		const badge = this.imgBadge;
 		// Clamp to the pane, not just the readable column: the column width
 		// plus the measured bleed on both sides, matching what styles.css
 		// will let the committed image render at.
+		//
+		// This runs before the width is measured, and has to: updateImageBleed
+		// restamps every image, which can move the one under the pointer. A
+		// startW read before it is the width of a moment that has already passed,
+		// and the drag then jumps by that difference on its first movement.
 		this.updateImageBleed();
 		const host = img.closest<HTMLElement>(".markdown-source-view");
 		const win = img.ownerDocument.defaultView ?? window;
 		const bleed = host ? parseFloat(win.getComputedStyle(host).getPropertyValue("--ped-img-bleed")) || 0 : 0;
 		const col = (img.closest<HTMLElement>(".cm-content"))?.clientWidth;
 		const max = Math.max(120, col != null ? col + 2 * bleed : 2000);
+		const startW = img.getBoundingClientRect().width;
+		this.imgDrag = { img, startW, startX: e.clientX, dir };
+		document.body.addClass("ped-imgresizing");
+		document.body.style.setProperty("--ped-resize-cursor", cursor);
+		if (!this.imgBadge) this.imgBadge = document.body.createDiv({ cls: "ped-imgbadge" });
+		const badge = this.imgBadge;
 		const move = (ev: PointerEvent) => {
 			const drag = this.imgDrag;
 			if (!drag) return;
@@ -7096,8 +7109,7 @@ export default class PowerEditorPlugin extends Plugin {
 		const container = img.closest<HTMLElement>(".internal-embed");
 		const target = container?.getAttribute("src") ?? img.getAttribute("src") ?? "";
 		if (!target) return null;
-		for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-			const view = leaf.view as MarkdownView;
+		for (const view of this.markdownViews()) {
 			if (!view.containerEl.contains(img)) continue;
 			const cm = this.cmOf(view);
 			if (!cm) return null;
