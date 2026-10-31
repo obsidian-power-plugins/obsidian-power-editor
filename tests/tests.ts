@@ -30,7 +30,7 @@ import {
 	headerCellWidth,
 	splitTableRow,
 } from "../src/blocks";
-import { resizeEmbed } from "../src/embed";
+import { pastedWidth, resizeEmbed, withWidth } from "../src/embed";
 import {
 	attachmentFolder,
 	attachmentMarkdown,
@@ -589,6 +589,11 @@ eq(resizeEmbed("![[shot.png|640]]", "shot.png", null), "![[shot.png]]", "null wi
 eq(resizeEmbed("![chart|500](https://x.dev/c.png)", "https://x.dev/c.png", 250), "![chart|250](https://x.dev/c.png)", "markdown image widths rewrite in the alt");
 eq(resizeEmbed("![](https://x.dev/c.png)", "https://x.dev/c.png", 250), "![250](https://x.dev/c.png)", "alt-less markdown images take a bare width");
 eq(resizeEmbed("no embeds here", "shot.png", 100), null, "lines without the embed return null");
+eq(pastedWidth(2400, 700), 700, "a wide screenshot is capped");
+eq(pastedWidth(420, 700), null, "a small crop keeps its own size");
+eq(pastedWidth(2400, 0), null, "a cap of 0 leaves pictures alone");
+eq(withWidth("![[Pasted image 1.png]]", 700), "![[Pasted image 1.png|700]]", "a pasted wiki embed gains a width");
+eq(withWidth("![](Pasted%20image%201.png)", 700), "![700](Pasted%20image%201.png)", "a pasted markdown embed gains a width");
 
 // --- font size + scripts ---
 eq(setFontSize("hello", "1.25em"), '<span style="font-size:1.25em">hello</span>', "font size wraps a span");

@@ -131,3 +131,21 @@ function basename(p: string): string {
 	}
 	return p.split(/[/\\]/).pop() ?? p;
 }
+
+/** The width a newly pasted picture should be written at, or null to leave it
+ *  at its own size. Only ever shrinks: a small crop is already the size it
+ *  should be, and widening it would only blur it. A cap of 0 means off. */
+export function pastedWidth(natural: number, cap: number): number | null {
+	return cap > 0 && natural > cap ? cap : null;
+}
+
+/** Give a freshly generated embed a width, whichever form the vault writes
+ *  links in. Unlike resizeEmbed there is no rendered image to match against;
+ *  the link is the only thing in the string. */
+export function withWidth(link: string, width: number): string {
+	const wiki = /^!\[\[([^\]]+)\]\]$/.exec(link);
+	if (wiki) return `![[${wiki[1]}|${width}]]`;
+	const md = /^!\[([^\]]*)\]\(([^)]*)\)$/.exec(link);
+	if (md) return `![${md[1] ? `${md[1]}|${width}` : width}](${md[2]})`;
+	return link;
+}

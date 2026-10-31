@@ -73,7 +73,7 @@ import {
 } from "./blocks";
 import { cleanPastedHtml, escapePlaceholderTags, FENCE_LINE, fenceIndent, findPlaceholderTags, insideFence, isOneMarkdownTable, listContentIndent, looksLikeMarkdownTable, nextItemAfterFence, planPastedMarkdown, tabbedTextToMarkdown, textBesideMarker, type PlaceholderTag } from "./clean";
 import { buildMultipart, planDictationInsert } from "./dictate";
-import { editEmbed, embedInfo, removeEmbed, resizeEmbed } from "./embed";
+import { editEmbed, embedInfo, pastedWidth, removeEmbed, resizeEmbed, withWidth } from "./embed";
 import {
 	attachmentFolder,
 	attachmentMarkdown,
@@ -697,6 +697,10 @@ interface PowerEditorSettings {
 	/** Whether an inserted PDF is a link that opens it, or an embedded viewer
 	 *  drawing its pages in the note. */
 	pdfInsert: PdfInsert;
+	/** The widest a pasted or dropped picture is written at, in px; 0 leaves
+	 *  pictures at their own size, as Obsidian does. A full-screen capture
+	 *  otherwise lands wider than the page and has to be dragged down by hand. */
+	pastedImageWidth: number;
 	showNotifications: boolean;
 }
 
@@ -742,6 +746,7 @@ const DEFAULT_SETTINGS: PowerEditorSettings = {
 	fileSubfolder: "Files",
 	routeDroppedFiles: true,
 	pdfInsert: "link",
+	pastedImageWidth: 700,
 	showNotifications: true,
 };
 
@@ -2895,6 +2900,20 @@ export default class PowerEditorPlugin extends Plugin {
 				this.insertPasted(editor, own);
 			})
 		);
+		// A pasted or dropped picture, written at a sensible width. Registered
+		// after the HTML cleaner on purpose: Word and Outlook put a picture of
+		// the copied text on the clipboard beside the HTML, and that copy is
+		// text, not a screenshot.
+		this.registerEvent(
+			this.app.workspace.on("editor-drop", (evt, editor, info) => {
+				if (evt.defaultPrevented) return;
+				const images = this.pastedImages(evt.dataTransfer);
+				if (!images.length) return;
+				evt.preventDefault();
+				const at = this.dropPosition(editor, evt) ?? editor.getCursor();
+				void this.insertImages(editor, images, info?.file?.path ?? "", at);
+			})
+		);
 		// clean-Markdown pasting: strip Word/Outlook/web sludge before it lands
 		this.registerEvent(
 			this.app.workspace.on("editor-paste", (evt, editor) => {
@@ -2903,6 +2922,17 @@ export default class PowerEditorPlugin extends Plugin {
 				if (md === null) return;
 				evt.preventDefault();
 				this.insertPasted(editor, md);
+			})
+		);
+		this.registerEvent(
+			this.app.workspace.on("editor-paste", (evt, editor, info) => {
+				if (evt.defaultPrevented) return;
+				const images = this.pastedImages(evt.clipboardData);
+				if (!images.length) return;
+				evt.preventDefault();
+				const from = editor.getCursor("from");
+				if (editor.somethingSelected()) editor.replaceSelection("");
+				void this.insertImages(editor, images, info?.file?.path ?? "", from);
 			})
 		);
 		// Plain text carries no HTML to clean, so it never reaches the cleaner,
@@ -3723,6 +3753,62 @@ export default class PowerEditorPlugin extends Plugin {
 	private attachable(dt: DataTransfer | null): File[] {
 		if (!this.settings.routeDroppedFiles || this.settings.fileLocation === "obsidian") return [];
 		return Array.from(dt?.files ?? []).filter((f) => f.name && !isImageFile(f.name, f.type));
+	}
+
+	/** The pictures on a paste or drop that should be written at the width
+	 *  setting, or nothing to leave the event to Obsidian. Anything carrying
+	 *  HTML is a copy out of a page or a document, which the cleaner owns; a
+	 *  mix of pictures and other files is left whole rather than split. */
+	private pastedImages(dt: DataTransfer | null): File[] {
+		if (!dt || this.settings.pastedImageWidth <= 0 || dt.getData("text/html")) return [];
+		const files = Array.from(dt.files ?? []);
+		return files.length && files.every((f) => isImageFile(f.name, f.type)) ? files : [];
+	}
+
+	/** Save each picture where Obsidian would have, and write its embed with
+	 *  a width. Each lands on a line of its own with an empty line after it
+	 *  and the caret there, so a run of screenshots can be pasted one after
+	 *  another without touching the keyboard in between. */
+	private async insertImages(ed: Editor, files: File[], notePath: string, at: EditorPosition) {
+		const written: string[] = [];
+		for (const f of files) {
+			try {
+				// a screenshot reaches the clipboard as "image.png"; ten of those
+				// in one folder read as nothing, so it is named the way Obsidian names it
+				const ext = f.name.includes(".") ? f.name.split(".").pop()! : (f.type.split("/")[1] ?? "png");
+				const name = !f.name || /^image\.\w+$/i.test(f.name) ? `Pasted image ${window.moment().format("YYYYMMDDHHmmss")}.${ext}` : f.name;
+				const dest = await this.app.fileManager.getAvailablePathForAttachment(name, notePath);
+				const saved = await this.app.vault.createBinary(dest, await f.arrayBuffer());
+				const link = attachmentMarkdown(this.app.fileManager.generateMarkdownLink(saved, notePath), saved.name, this.settings.pdfInsert);
+				const width = pastedWidth(await this.naturalWidth(f), this.settings.pastedImageWidth);
+				written.push(width == null ? link : withWidth(link, width));
+			} catch (e) {
+				new Notice(`Power Editor could not save ${f.name || "the picture"}: ${e instanceof Error ? e.message : String(e)}`, 8000);
+			}
+		}
+		if (!written.length) return;
+		const lines = this.insertBlockAt(ed, written.join("\n"), at);
+		// the caret goes on an empty line under the last picture, made if the
+		// paste did not leave one, rather than after the embed, where Enter
+		// would first have to be pressed
+		const tail = written[written.length - 1];
+		const embedLine = at.line + Math.max(0, lines.findIndex((l) => l.includes(tail)));
+		const below = embedLine + 1;
+		if (below >= ed.lineCount() || ed.getLine(below).trim() !== "") ed.replaceRange("\n", { line: embedLine, ch: ed.getLine(embedLine).length });
+		ed.setCursor({ line: below, ch: 0 });
+	}
+
+	/** A picture's own pixel width, or 0 when it cannot be read (an SVG has
+	 *  none worth trusting), which leaves it unsized. */
+	private async naturalWidth(f: File): Promise<number> {
+		try {
+			const bmp = await createImageBitmap(f);
+			const w = bmp.width;
+			bmp.close();
+			return w;
+		} catch {
+			return 0;
+		}
 	}
 
 	/** Where a drop landed, which is not where the cursor is: the caret does not
@@ -9283,9 +9369,21 @@ class PowerEditorSettingTab extends PluginSettingTab {
 			{
 				name: "Catch dropped and pasted files",
 				desc: "Dragging a PDF onto a note, or pasting one copied from your computer, files it the way the setting above asks. Turn this off to insert files only from the toolbar, the slash menu, or the command.",
-				help: "Images are never caught, so a pasted screenshot behaves exactly as it always has. Dragging a note or attachment from Obsidian's own file explorer is not affected either, since that carries a link rather than a file.",
+				help: "Images are never caught, so a pasted screenshot still goes wherever Obsidian puts attachments. Dragging a note or attachment from Obsidian's own file explorer is not affected either, since that carries a link rather than a file.",
 				build: (st) => {
 					st.addToggle((t) => t.setValue(s.routeDroppedFiles).onChange((v) => ((s.routeDroppedFiles = v), save())));
+				},
+			},
+			{
+				name: "Pasted image width",
+				desc: "A screenshot you paste or drag in is written at this width instead of its full size, with an empty line under it so the next one can be pasted straight away.",
+				help: "Only wider pictures are shrunk; a small crop keeps its own size. The width is written into the embed (![[image.png|700]]), so the corner handles still resize any one picture afterwards. Full size leaves pasting to Obsidian.",
+				aliases: ["screenshot", "image", "resize"],
+				build: (st) => {
+					st.addDropdown((d) => {
+						for (const w of [0, 400, 500, 600, 700, 800, 1000]) d.addOption(String(w), w ? `${w} px` : "Full size");
+						d.setValue(String(s.pastedImageWidth)).onChange((v) => ((s.pastedImageWidth = Number(v)), save()));
+					});
 				},
 			},
 		];
