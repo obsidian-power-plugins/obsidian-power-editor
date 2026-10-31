@@ -3766,8 +3766,8 @@ export default class PowerEditorPlugin extends Plugin {
 	}
 
 	/** Save each picture where Obsidian would have, and write its embed with
-	 *  a width. Each lands on a line of its own with an empty line after it
-	 *  and the caret there, so a run of screenshots can be pasted one after
+	 *  a width. Each lands on a line of its own with a blank line after it
+	 *  and the caret on the line below that, so a run of screenshots can be pasted one after
 	 *  another without touching the keyboard in between. */
 	private async insertImages(ed: Editor, files: File[], notePath: string, at: EditorPosition) {
 		const written: string[] = [];
@@ -3787,15 +3787,17 @@ export default class PowerEditorPlugin extends Plugin {
 			}
 		}
 		if (!written.length) return;
-		const lines = this.insertBlockAt(ed, written.join("\n"), at);
-		// the caret goes on an empty line under the last picture, made if the
-		// paste did not leave one, rather than after the embed, where Enter
-		// would first have to be pressed
+		const lines = this.insertBlockAt(ed, written.join("\n\n"), at);
+		// the caret goes two lines under the last picture, past a blank line
+		// that keeps one screenshot from butting against the next, rather than
+		// after the embed, where Enter would first have to be pressed twice.
+		// Lines already empty there are used as they are, not added to.
 		const tail = written[written.length - 1];
 		const embedLine = at.line + Math.max(0, lines.findIndex((l) => l.includes(tail)));
-		const below = embedLine + 1;
-		if (below >= ed.lineCount() || ed.getLine(below).trim() !== "") ed.replaceRange("\n", { line: embedLine, ch: ed.getLine(embedLine).length });
-		ed.setCursor({ line: below, ch: 0 });
+		for (let n = embedLine + 1; n <= embedLine + 2; n++) {
+			if (n >= ed.lineCount() || ed.getLine(n).trim() !== "") ed.replaceRange("\n", { line: n - 1, ch: ed.getLine(n - 1).length });
+		}
+		ed.setCursor({ line: embedLine + 2, ch: 0 });
 	}
 
 	/** A picture's own pixel width, or 0 when it cannot be read (an SVG has
@@ -9376,7 +9378,7 @@ class PowerEditorSettingTab extends PluginSettingTab {
 			},
 			{
 				name: "Pasted image width",
-				desc: "A screenshot you paste or drag in is written at this width instead of its full size, with an empty line under it so the next one can be pasted straight away.",
+				desc: "A screenshot you paste or drag in is written at this width instead of its full size, with a blank line under it and the cursor ready for the next one.",
 				help: "Only wider pictures are shrunk; a small crop keeps its own size. The width is written into the embed (![[image.png|700]]), so the corner handles still resize any one picture afterwards. Full size leaves pasting to Obsidian.",
 				aliases: ["screenshot", "image", "resize"],
 				build: (st) => {
