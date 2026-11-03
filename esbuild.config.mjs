@@ -22,6 +22,11 @@ const ctx = await esbuild.context({
 	// feature unavailable makes esbuild emit new RegExp("...") instead, which
 	// parses on any engine and can only fail if that code path actually runs.
 	supported: { "regexp-lookbehind-assertions": false },
+	// The Hunspell dictionary behind spelling suggestions ships inside main.js
+	// as plain text, since a community install only ever delivers main.js,
+	// manifest.json, and styles.css. A string literal costs next to nothing
+	// to load; the parse into a dictionary waits for the first right-click.
+	loader: { ".aff": "text", ".dic": "text" },
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,

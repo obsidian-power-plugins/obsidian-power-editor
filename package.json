@@ -7,12 +7,14 @@
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"test": "esbuild tests/tests.ts --bundle --format=cjs --outfile=tests.cjs && node tests.cjs",
+		"test": "esbuild tests/tests.ts --bundle --platform=node --format=cjs --outfile=tests.cjs && node tests.cjs",
 		"deploy": "npm run build && node predeploy.mjs && node deploy.mjs",
 		"predeploy": "node predeploy.mjs"
 	},
 	"dependencies": {
-		"@anthropic-ai/sdk": "0.110.0"
+		"@anthropic-ai/sdk": "0.110.0",
+		"dictionary-en": "4.0.0",
+		"nspell": "2.1.5"
 	},
 	"devDependencies": {
 		"@codemirror/language": "6.12.4",

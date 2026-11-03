@@ -73,6 +73,10 @@ import {
 } from "./blocks";
 import { cleanPastedHtml, escapePlaceholderTags, FENCE_LINE, fenceIndent, findPlaceholderTags, insideFence, isOneMarkdownTable, listContentIndent, looksLikeMarkdownTable, nextItemAfterFence, planPastedMarkdown, tabbedTextToMarkdown, textBesideMarker, type PlaceholderTag } from "./clean";
 import { buildMultipart, planDictationInsert } from "./dictate";
+import nspell from "nspell";
+import enAff from "../node_modules/dictionary-en/index.aff";
+import enDic from "../node_modules/dictionary-en/index.dic";
+import { checkWord, userWords, wordAt, type Lexicon } from "./spell";
 import { editEmbed, embedInfo, pastedWidth, removeEmbed, resizeEmbed, withWidth } from "./embed";
 import {
 	attachmentFolder,
@@ -702,6 +706,12 @@ interface PowerEditorSettings {
 	 *  otherwise lands wider than the page and has to be dragged down by hand. */
 	pastedImageWidth: number;
 	showNotifications: boolean;
+	/** Power Editor's own suggestions on the right-click menu of a word the
+	 *  spellchecker flagged, in place of the system's thinner ones. */
+	spellSuggestions: boolean;
+	/** Words added to the dictionary from that menu. Keys rather than a list,
+	 *  so two devices adding different words merge instead of racing. */
+	spellWords: Record<string, true>;
 }
 
 const DEFAULT_SETTINGS: PowerEditorSettings = {
@@ -748,6 +758,8 @@ const DEFAULT_SETTINGS: PowerEditorSettings = {
 	pdfInsert: "link",
 	pastedImageWidth: 700,
 	showNotifications: true,
+	spellSuggestions: true,
+	spellWords: {},
 };
 
 const OUTLINE_CHOICES: [string, string][] = [
@@ -2252,6 +2264,9 @@ export default class PowerEditorPlugin extends Plugin {
 	private edgeHover: HTMLTableCellElement | null = null;
 	private colorPop: HTMLElement | null = null;
 	private rightPress: { x: number; y: number; el: Element; offered: boolean } | null = null;
+	/** Built on the first right-click that needs it. The dictionary ships inside
+	 *  main.js as text, which costs nothing until nspell parses it (about 50ms). */
+	private speller: Lexicon | null = null;
 	/* image resize state */
 	private imgGrips: HTMLElement[] = [];
 	private imgBadge: HTMLElement | null = null;
@@ -3179,6 +3194,8 @@ export default class PowerEditorPlugin extends Plugin {
 				);
 			})
 		);
+		this.registerEvent(this.app.workspace.on("editor-menu", (menu, editor) => this.offerSpelling(menu, editor)));
+		this.app.workspace.onLayoutReady(() => this.syncSpellWords());
 		this.addCommand({ id: "align-left", icon: "align-left", name: "Align left", editorCallback: (ed) => this.applyAlign(ed, "left") });
 		this.addCommand({ id: "align-center", icon: "align-center", name: "Align center", editorCallback: (ed) => this.applyAlign(ed, "center") });
 		this.addCommand({ id: "align-right", name: "Align right", editorCallback: (ed) => this.applyAlign(ed, "right") });
@@ -5988,6 +6005,130 @@ export default class PowerEditorPlugin extends Plugin {
 		if (cm == null || off == null) return null;
 		const l = cm.state.doc.lineAt(off);
 		return { line: l.number - 1, ch: off - l.from };
+	}
+
+	/**
+	 * Better spelling suggestions on the right-click menu.
+	 *
+	 * The squiggle is the system checker's, and on macOS it is NSSpellChecker,
+	 * which a plugin cannot replace. Its suggestions are thin: "On-Prem" gets
+	 * "No suggestions…". By the time this event fires Obsidian has already put
+	 * those in the menu's "correction" section, with its own "Add to dictionary"
+	 * under "spellcheck", so this swaps them for ranked ones from spell.ts.
+	 *
+	 * On desktop it only acts on a word the system flagged, which is the word
+	 * with a squiggle under it; offering fixes for a word with no squiggle would
+	 * read as the menu arguing with the page. Mobile has no such signal, so
+	 * there the engine's own verdict decides.
+	 *
+	 * `items`, `section`, and `callback` are not public API. If a later version
+	 * renames them, the system's items simply stay and ours are added beside
+	 * them.
+	 */
+	private offerSpelling(menu: Menu, editor: Editor) {
+		if (!this.settings.spellSuggestions) return;
+		const vault = this.app.vault as unknown as { getConfig?(key: string): unknown };
+		if (vault.getConfig?.("spellcheck") === false) return;
+		if (this.rightPress?.el.closest(".cm-table-widget")) return; // Power Tables owns cells
+		type NativeItem = { section?: string; disabled?: boolean; callback?: (evt: unknown) => void };
+		const items = (menu as unknown as { items?: NativeItem[] }).items;
+		const known = Array.isArray(items);
+		const native = known ? items.filter((i) => i.section === "correction" || i.section === "spellcheck") : [];
+		if (Platform.isDesktopApp && known && !native.length) return;
+
+		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+		const at = (view && this.rightPressPos(view)) ?? editor.getCursor("from");
+		const line = editor.getLine(at.line);
+		const span = wordAt(line, at.ch);
+		if (!span) return;
+		const verdict = checkWord(span.word, { lex: this.spellLexicon(), user: userWords(this.settings.spellWords) });
+		if (verdict.ok && !native.length) return;
+
+		// keep the system's add: it is what clears the squiggle it drew
+		const learn = native.find((i) => i.section === "spellcheck")?.callback;
+		if (known && (verdict.suggestions.length || verdict.ok)) {
+			for (const i of native) items.remove(i);
+		} else if (known) {
+			for (const i of native) if (i.section === "spellcheck") items.remove(i);
+		}
+
+		const from = { line: at.line, ch: span.from };
+		const to = { line: at.line, ch: span.to };
+		for (const s of verdict.suggestions) {
+			menu.addItem((i) =>
+				i
+					.setTitle(s)
+					.setIcon("repeat")
+					.setSection("correction")
+					.onClick(() => {
+						// the menu is async; replace only if the word is still there
+						if (editor.getLine(at.line).slice(span.from, span.to) === span.word) editor.replaceRange(s, from, to);
+					})
+			);
+		}
+		if (verdict.ok) {
+			const what = verdict.term ? "a recognized term" : "spelled correctly";
+			menu.addItem((i) => i.setTitle(`“${span.word}” is ${what}`).setIcon("check").setSection("correction").setDisabled(true));
+		} else if (!verdict.suggestions.length && !(known && native.some((i) => i.section === "correction"))) {
+			menu.addItem((i) => i.setTitle("No suggestions").setSection("correction").setDisabled(true));
+		}
+		menu.addItem((i) =>
+			i
+				.setTitle("Add to dictionary")
+				.setIcon("book-plus")
+				.setSection("spellcheck")
+				.onClick((evt) => {
+					this.settings.spellWords = { ...this.settings.spellWords, [span.word]: true };
+					void this.persistSettings();
+					if (learn) learn(evt);
+					else this.learnSystemWord(span.word);
+				})
+		);
+	}
+
+	private spellLexicon(): Lexicon {
+		return (this.speller ??= nspell(enAff, enDic));
+	}
+
+	/** The system spellchecker's session, on desktop; null elsewhere. */
+	private spellSession(): {
+		addWordToSpellCheckerDictionary(w: string): boolean;
+		listWordsInSpellCheckerDictionary(): Promise<string[]>;
+	} | null {
+		try {
+			const remote = (window as unknown as { electron?: { remote?: { getCurrentWebContents?(): { session?: unknown } } } }).electron?.remote;
+			return (remote?.getCurrentWebContents?.().session as ReturnType<PowerEditorPlugin["spellSession"]>) ?? null;
+		} catch {
+			return null;
+		}
+	}
+
+	private learnSystemWord(word: string) {
+		try {
+			this.spellSession()?.addWordToSpellCheckerDictionary(word);
+		} catch {
+			/* no system checker to tell; the word is still in ours */
+		}
+	}
+
+	/**
+	 * Teach the system checker the words added on other devices.
+	 *
+	 * The settings are synced and the system's dictionary is not, so a word
+	 * added on the laptop would otherwise stay squiggled on the desktop: no
+	 * longer offered fixes, but still underlined. The system call is the same
+	 * one Obsidian's own "Add to dictionary" makes.
+	 */
+	private async syncSpellWords() {
+		const session = this.spellSession();
+		const words = Object.keys(this.settings.spellWords ?? {});
+		if (!session || !words.length) return;
+		try {
+			const have = new Set((await session.listWordsInSpellCheckerDictionary()).map((w) => w.toLowerCase()));
+			for (const w of words) if (!have.has(w.toLowerCase())) session.addWordToSpellCheckerDictionary(w);
+		} catch {
+			/* an older Electron without the list call; nothing lost */
+		}
 	}
 
 	private focusedCm(fallback: EditorView | null): EditorView | null {
@@ -9239,6 +9380,33 @@ class PowerEditorSettingTab extends PluginSettingTab {
 							save();
 							this.plugin.applyCodeTheme();
 						})
+					);
+				},
+			},
+			{
+				name: "Spelling suggestions",
+				desc: "Right-click a misspelled word for ranked corrections, including business and tech terms like SaaS, on-prem, and Kubernetes, and hyphenated or run-together words.",
+				help: "The underline is still your system's spellchecker; this only changes what the right-click menu offers. Words you add to the dictionary are kept in this plugin's settings, so they follow you to your other devices.",
+				aliases: ["spellcheck", "spell check", "dictionary", "spelling"],
+				build: (st) => {
+					st.addToggle((t) => t.setValue(s.spellSuggestions).onChange((v) => ((s.spellSuggestions = v), save())));
+				},
+			},
+			{
+				name: "Your dictionary",
+				desc: "Words added from the right-click menu, one per line. Edit or remove them here.",
+				aliases: ["spellcheck", "custom words", "dictionary"],
+				build: (st) => {
+					st.addTextArea((t) =>
+						t
+							.setPlaceholder("Rakesh")
+							.setValue(Object.keys(s.spellWords ?? {}).sort((a, b) => a.localeCompare(b)).join("\n"))
+							.onChange((v) => {
+								const next: Record<string, true> = {};
+								for (const w of v.split("\n")) if (w.trim()) next[w.trim()] = true;
+								s.spellWords = next;
+								save();
+							})
 					);
 				},
 			},

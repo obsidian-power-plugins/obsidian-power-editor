@@ -71,6 +71,9 @@ import {
 } from "../src/tasks";
 import { cleanPastedHtml, escapePlaceholderTags, FENCE_LINE, fenceIndent, findPlaceholderTags, insideFence, isOneMarkdownTable, listContentIndent, looksLikeMarkdownTable, nextItemAfterFence, padPastedMarkdown, planPastedMarkdown, preCleanHtml, postCleanMarkdown, tableToMarkdown, tabbedTextToMarkdown } from "../src/clean";
 import { buildMultipart, planDictationInsert } from "../src/dictate";
+import { checkWord, distance, matchCase, skipWord, termFor, userWords, wordAt } from "../src/spell";
+import nspell from "nspell";
+import { readFileSync } from "fs";
 import {
 	alignOf,
 	cleanCopyText,
@@ -1632,6 +1635,54 @@ eq(moveItem(["a", "b"], 5, 0).join(""), "ab", "an out-of-range source is ignored
 	eq(listContinuation("- [x] done", 1), "\n- [ ] ", "a checklist continues unticked, the way Enter does");
 	eq(listContinuation("-5 degrees overnight", 1), "\n", "a minus sign that starts a sentence is not a bullet");
 	eq(listContinuation("2026. What a year", 1), "\n2027. ", "a year with a period after it does read as one, as it does everywhere in Markdown");
+}
+
+// --- spelling suggestions for the right-click menu ---
+{
+	eq(wordAt("- On-Prem Test Server", 4), { from: 2, to: 9, word: "On-Prem" }, "a hyphenated word is one word");
+	eq(wordAt("- On-Prem Test Server", 9), { from: 2, to: 9, word: "On-Prem" }, "the caret just past it still means it");
+	eq(wordAt("don't stop", 1)?.word, "don't", "an apostrophe inside a word belongs to it");
+	eq(wordAt("pre- and post-", 1)?.word, "pre", "a trailing hyphen is punctuation");
+	eq(wordAt("CI/CD pipeline", 0)?.word, "CI/CD", "so is a slash between letters");
+	eq(wordAt("a  b", 2), null, "nothing between words");
+
+	ok(skipWord("NASA") && skipWord("v2") && skipWord("x"), "acronyms, words with digits, and single letters are skipped");
+	ok(!skipWord("Prem"), "an ordinary capitalized word is not");
+
+	eq(termFor("On-Prem"), { term: "on-prem", exact: true }, "a lowercase term takes sentence capitalization");
+	eq(termFor("ON-PREM"), { term: "on-prem", exact: true }, "and all caps");
+	eq(termFor("onprem"), { term: "on-prem", exact: false }, "but its hyphen is part of the spelling");
+	eq(termFor("Saas"), { term: "SaaS", exact: false }, "a term with capitals of its own must keep them");
+	eq(distance("teh", "the"), 0.5, "swapped letters cost half an edit");
+	ok(distance("acommodate", "accommodate") < 1, "so does a missing double letter");
+	eq(matchCase("Recieve", "receive"), "Receive", "a suggestion takes the word's capital");
+	eq(matchCase("saas", "SaaS"), "SaaS", "unless it has capitals of its own");
+	eq(matchCase("TEH", "the"), "THE", "an all-caps word gets an all-caps fix");
+	eq([...userWords({ Rakesh: true })], ["rakesh"], "the user's words match regardless of case");
+
+	const dir = "node_modules/dictionary-en/";
+	const lex = nspell(readFileSync(dir + "index.aff", "utf8"), readFileSync(dir + "index.dic", "utf8"));
+	const ctx = { lex, user: new Set<string>() };
+	const top = (w: string) => checkWord(w, ctx).suggestions[0];
+	ok(checkWord("On-Prem", ctx).ok, "On-Prem is a known term, not a misspelling");
+	ok(checkWord("state-of-the-art", ctx).ok, "a hyphenated phrase of real words passes part by part");
+	ok(checkWord("PowerEditor", ctx).ok, "so does a product name built of real words");
+	ok(checkWord("Kubernetes", ctx).ok && checkWord("SaaS", ctx).ok, "tech names pass");
+	ok(checkWord("python", ctx).ok, "a term's lowercase that is also a word is left alone");
+	ok(checkWord("Steve's", ctx).ok, "a possessive is checked without its ending");
+	eq(top("teh"), "the", "a transposition is the first suggestion");
+	eq(top("Recieve"), "Receive", "in the word's own case");
+	eq(top("definately"), "definitely", "a classic misspelling is fixed");
+	eq(top("occured"), "occurred", "and a real word beats a split into scraps");
+	eq(top("saas"), "SaaS", "a term in the wrong case gets its proper casing");
+	eq(top("Kubernets"), "Kubernetes", "a near miss on a term finds the term");
+	eq(top("onprem"), "on-prem", "a term missing its hyphen gets it back");
+	eq(top("databasebackup"), "database backup", "a run-together pair is split");
+	eq(top("alot"), "a lot", "including onto a one-letter word");
+	eq(top("back-of-teh-house"), "back-of-the-house", "only the broken part of a hyphenated word is fixed");
+	eq(top("recieve's"), "receive's", "a possessive keeps its ending");
+	ok(!checkWord("Rakesh", ctx).ok, "a name the dictionary lacks is flagged");
+	ok(checkWord("Rakesh", { lex, user: userWords({ rakesh: true }) }).ok, "until it is added to the user's dictionary");
 }
 
 // The summary runs last on purpose: any test added below it would print FAIL
