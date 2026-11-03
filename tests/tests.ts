@@ -71,7 +71,7 @@ import {
 } from "../src/tasks";
 import { cleanPastedHtml, escapePlaceholderTags, FENCE_LINE, fenceIndent, findPlaceholderTags, insideFence, isOneMarkdownTable, listContentIndent, looksLikeMarkdownTable, nextItemAfterFence, padPastedMarkdown, planPastedMarkdown, preCleanHtml, postCleanMarkdown, tableToMarkdown, tabbedTextToMarkdown } from "../src/clean";
 import { buildMultipart, planDictationInsert } from "../src/dictate";
-import { checkWord, distance, matchCase, skipWord, termFor, userWords, wordAt } from "../src/spell";
+import { acceptedSpans, checkWord, distance, matchCase, skipWord, termFor, userWords, wordAt } from "../src/spell";
 import nspell from "nspell";
 import { readFileSync } from "fs";
 import {
@@ -1683,6 +1683,12 @@ eq(moveItem(["a", "b"], 5, 0).join(""), "ab", "an out-of-range source is ignored
 	eq(top("recieve's"), "receive's", "a possessive keeps its ending");
 	ok(!checkWord("Rakesh", ctx).ok, "a name the dictionary lacks is flagged");
 	ok(checkWord("Rakesh", { lex, user: userWords({ rakesh: true }) }).ok, "until it is added to the user's dictionary");
+	const line = "- On-Prem SaaS for Rakesh's team, not saas or API";
+	eq(
+		acceptedSpans(line, userWords({ rakesh: true })).map((r) => line.slice(r.from, r.to)),
+		["On-Prem", "SaaS", "Rakesh's"],
+		"terms and the user's words are the spans the system checker is told to skip"
+	);
 }
 
 // The summary runs last on purpose: any test added below it would print FAIL

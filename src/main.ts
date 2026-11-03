@@ -76,7 +76,7 @@ import { buildMultipart, planDictationInsert } from "./dictate";
 import nspell from "nspell";
 import enAff from "../node_modules/dictionary-en/index.aff";
 import enDic from "../node_modules/dictionary-en/index.dic";
-import { checkWord, userWords, wordAt, type Lexicon } from "./spell";
+import { acceptedSpans, checkWord, userWords, wordAt, type Lexicon } from "./spell";
 import { editEmbed, embedInfo, pastedWidth, removeEmbed, resizeEmbed, withWidth } from "./embed";
 import {
 	attachmentFolder,
@@ -2214,6 +2214,51 @@ function headingPlaceholders(plugin: PowerEditorPlugin) {
 	);
 }
 
+/**
+ * Switch the system squiggle off for words Power Editor knows are right.
+ *
+ * The underline is Chromium's, which on macOS asks NSSpellChecker, and the
+ * only way to teach that a word is its learned-words list: shared by every app
+ * on the Mac, so "SaaS" taught here would also stop being flagged in Mail.
+ * Chromium does honor spellcheck="false" on an element inside an editable
+ * region, though, so recognized terms and the user's own words are wrapped in
+ * a span that says so. Nothing leaves Obsidian, and a word added on one device
+ * clears on every device the settings sync to.
+ */
+function spellExemptions(plugin: PowerEditorPlugin) {
+	const skip = Decoration.mark({ attributes: { spellcheck: "false" } });
+	return ViewPlugin.fromClass(
+		class {
+			decorations: DecorationSet;
+			version = plugin.spellVersion;
+			constructor(view: EditorView) {
+				this.decorations = this.build(view);
+			}
+			update(u: ViewUpdate) {
+				if (u.docChanged || u.viewportChanged || this.version !== plugin.spellVersion) {
+					this.version = plugin.spellVersion;
+					this.decorations = this.build(u.view);
+				}
+			}
+			build(view: EditorView): DecorationSet {
+				const b = new RangeSetBuilder<Decoration>();
+				if (!plugin.settings.spellSuggestions) return b.finish();
+				const user = userWords(plugin.settings.spellWords);
+				for (const { from, to } of view.visibleRanges) {
+					let pos = from;
+					while (pos <= to) {
+						const line = view.state.doc.lineAt(pos);
+						for (const r of acceptedSpans(line.text, user)) b.add(line.from + r.from, line.from + r.to, skip);
+						pos = line.to + 1;
+					}
+				}
+				return b.finish();
+			}
+		},
+		{ decorations: (v) => v.decorations }
+	);
+}
+
 type CMView = EditorView & { posAtCoords(coords: { x: number; y: number }): number | null };
 
 /** Toolbar button registry per pane, so active states can be repainted fast. */
@@ -2267,6 +2312,8 @@ export default class PowerEditorPlugin extends Plugin {
 	/** Built on the first right-click that needs it. The dictionary ships inside
 	 *  main.js as text, which costs nothing until nspell parses it (about 50ms). */
 	private speller: Lexicon | null = null;
+	/** Bumped when the user's dictionary changes; see spellExemptions. */
+	spellVersion = 0;
 	/** Words the system spellchecker has learned, lowercased, read at startup;
 	 *  see offerSpelling. */
 	private systemWords = new Set<string>();
@@ -3198,6 +3245,7 @@ export default class PowerEditorPlugin extends Plugin {
 			})
 		);
 		this.registerEvent(this.app.workspace.on("editor-menu", (menu, editor) => this.offerSpelling(menu, editor)));
+		this.registerEditorExtension(spellExemptions(this));
 		this.app.workspace.onLayoutReady(() => this.syncSpellWords());
 		this.addCommand({ id: "align-left", icon: "align-left", name: "Align left", editorCallback: (ed) => this.applyAlign(ed, "left") });
 		this.addCommand({ id: "align-center", icon: "align-center", name: "Align center", editorCallback: (ed) => this.applyAlign(ed, "center") });
@@ -6047,16 +6095,16 @@ export default class PowerEditorPlugin extends Plugin {
 		const span = wordAt(line, at.ch);
 		if (!span) return;
 		const verdict = checkWord(span.word, { lex: this.spellLexicon(), user: userWords(this.settings.spellWords) });
-		if (verdict.ok && !native.length) return;
-		if (!verdict.ok && !native.length && this.systemWords.has(span.word.toLowerCase())) return;
-
-		// keep the system's add: it is what clears the squiggle it drew
-		const learn = native.find((i) => i.section === "spellcheck")?.callback;
-		if (known && (verdict.suggestions.length || verdict.ok)) {
-			for (const i of native) items.remove(i);
-		} else if (known) {
-			for (const i of native) if (i.section === "spellcheck") items.remove(i);
+		// A word we accept has its squiggle switched off by spellExemptions, so
+		// a system flag on one is stale and its "No suggestions…" is noise.
+		if (verdict.ok) {
+			if (known) for (const i of native) items.remove(i);
+			return;
 		}
+		if (!native.length && this.systemWords.has(span.word.toLowerCase())) return;
+		// ours replaces the system's add, which would write the word into the
+		// dictionary every app on the Mac shares
+		if (known) for (const i of native) if (verdict.suggestions.length || i.section === "spellcheck") items.remove(i);
 
 		const from = { line: at.line, ch: span.from };
 		const to = { line: at.line, ch: span.to };
@@ -6072,10 +6120,7 @@ export default class PowerEditorPlugin extends Plugin {
 					})
 			);
 		}
-		if (verdict.ok) {
-			const what = verdict.term ? "a recognized term" : "spelled correctly";
-			menu.addItem((i) => i.setTitle(`“${span.word}” is ${what}`).setIcon("check").setSection("correction").setDisabled(true));
-		} else if (!verdict.suggestions.length && !(known && native.some((i) => i.section === "correction"))) {
+		if (!verdict.suggestions.length && !(known && native.some((i) => i.section === "correction"))) {
 			menu.addItem((i) => i.setTitle("No suggestions").setSection("correction").setDisabled(true));
 		}
 		menu.addItem((i) =>
@@ -6083,12 +6128,10 @@ export default class PowerEditorPlugin extends Plugin {
 				.setTitle("Add to dictionary")
 				.setIcon("book-plus")
 				.setSection("spellcheck")
-				.onClick((evt) => {
+				.onClick(() => {
 					this.settings.spellWords = { ...this.settings.spellWords, [span.word]: true };
 					void this.persistSettings();
-					this.systemWords.add(span.word.toLowerCase());
-					if (learn) learn(evt);
-					else this.learnSystemWord(span.word);
+					this.recheckSpelling();
 				})
 		);
 	}
@@ -6097,11 +6140,21 @@ export default class PowerEditorPlugin extends Plugin {
 		return (this.speller ??= nspell(enAff, enDic));
 	}
 
+	/**
+	 * Redraw which words the system checker skips, after the user's dictionary
+	 * changed. An empty transaction is enough: spellExemptions rebuilds when
+	 * this counter moves.
+	 */
+	recheckSpelling() {
+		this.spellVersion++;
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			const cm = leaf.view instanceof MarkdownView ? (leaf.view.editor as unknown as { cm?: EditorView }).cm : null;
+			cm?.dispatch({});
+		});
+	}
+
 	/** The system spellchecker's session, on desktop; null elsewhere. */
-	private spellSession(): {
-		addWordToSpellCheckerDictionary(w: string): boolean;
-		listWordsInSpellCheckerDictionary(): Promise<string[]>;
-	} | null {
+	private spellSession(): { listWordsInSpellCheckerDictionary(): Promise<string[]> } | null {
 		try {
 			const remote = (window as unknown as { electron?: { remote?: { getCurrentWebContents?(): { session?: unknown } } } }).electron?.remote;
 			return (remote?.getCurrentWebContents?.().session as ReturnType<PowerEditorPlugin["spellSession"]>) ?? null;
@@ -6110,37 +6163,21 @@ export default class PowerEditorPlugin extends Plugin {
 		}
 	}
 
-	private learnSystemWord(word: string) {
-		try {
-			this.spellSession()?.addWordToSpellCheckerDictionary(word);
-		} catch {
-			/* no system checker to tell; the word is still in ours */
-		}
-	}
-
 	/**
-	 * Teach the system checker the words added on other devices.
+	 * Remember what the system checker has learned, read once at startup.
 	 *
-	 * The settings are synced and the system's dictionary is not, so a word
-	 * added on the laptop would otherwise stay squiggled on the desktop: no
-	 * longer offered fixes, but still underlined. The system call is the same
-	 * one Obsidian's own "Add to dictionary" makes.
-	 *
-	 * The same read also remembers what the system has learned, which is the
-	 * only part of its judgment offerSpelling can still consult when the menu
-	 * arrives without a misspelling reported.
+	 * Read only. Writing to it would be the easy way to clear a squiggle, but
+	 * on macOS that is NSSpellChecker's learned-words list, shared by every app
+	 * on the Mac. spellExemptions clears ours inside Obsidian instead. What the
+	 * read buys is the system's judgment on words someone taught it elsewhere,
+	 * which offerSpelling consults when the menu arrives without a misspelling
+	 * reported.
 	 */
 	private async syncSpellWords() {
 		const session = this.spellSession();
 		if (!session) return;
 		try {
-			const have = new Set((await session.listWordsInSpellCheckerDictionary()).map((w) => w.toLowerCase()));
-			this.systemWords = have;
-			for (const w of Object.keys(this.settings.spellWords ?? {})) {
-				if (have.has(w.toLowerCase())) continue;
-				session.addWordToSpellCheckerDictionary(w);
-				have.add(w.toLowerCase());
-			}
+			this.systemWords = new Set((await session.listWordsInSpellCheckerDictionary()).map((w) => w.toLowerCase()));
 		} catch {
 			/* an older Electron without the list call; nothing lost */
 		}
@@ -9421,6 +9458,7 @@ class PowerEditorSettingTab extends PluginSettingTab {
 								for (const w of v.split("\n")) if (w.trim()) next[w.trim()] = true;
 								s.spellWords = next;
 								save();
+								this.plugin.recheckSpelling();
 							})
 					);
 				},

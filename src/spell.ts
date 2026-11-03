@@ -352,3 +352,24 @@ export function matchCase(typed: string, suggestion: string): string {
 export function userWords(stored: Record<string, unknown> | undefined): Set<string> {
 	return new Set(Object.keys(stored ?? {}).map((w) => w.toLowerCase()));
 }
+
+const TOKEN = /[\p{L}\p{M}\p{N}]+(?:['’\-/][\p{L}\p{M}\p{N}]+)*/gu;
+
+/**
+ * The words in a stretch of text that the system checker should be told to
+ * leave alone: recognized terms in an accepted casing, and the user's own
+ * words. Offsets are relative to `text`.
+ *
+ * Only these, not everything the engine passes. The rest the system already
+ * accepts, or judges for itself, and a span per word would be a lot of DOM
+ * for nothing.
+ */
+export function acceptedSpans(text: string, user: Set<string>): { from: number; to: number }[] {
+	const out: { from: number; to: number }[] = [];
+	for (const m of text.matchAll(TOKEN)) {
+		const [word] = splitPossessive(m[0].replace(/’/g, "'"));
+		if (skipWord(word)) continue;
+		if (user.has(word.toLowerCase()) || termFor(word)?.exact) out.push({ from: m.index!, to: m.index! + m[0].length });
+	}
+	return out;
+}
