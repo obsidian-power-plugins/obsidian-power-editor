@@ -2267,6 +2267,9 @@ export default class PowerEditorPlugin extends Plugin {
 	/** Built on the first right-click that needs it. The dictionary ships inside
 	 *  main.js as text, which costs nothing until nspell parses it (about 50ms). */
 	private speller: Lexicon | null = null;
+	/** Words the system spellchecker has learned, lowercased, read at startup;
+	 *  see offerSpelling. */
+	private systemWords = new Set<string>();
 	/* image resize state */
 	private imgGrips: HTMLElement[] = [];
 	private imgBadge: HTMLElement | null = null;
@@ -6016,10 +6019,13 @@ export default class PowerEditorPlugin extends Plugin {
 	 * those in the menu's "correction" section, with its own "Add to dictionary"
 	 * under "spellcheck", so this swaps them for ranked ones from spell.ts.
 	 *
-	 * On desktop it only acts on a word the system flagged, which is the word
-	 * with a squiggle under it; offering fixes for a word with no squiggle would
-	 * read as the menu arguing with the page. Mobile has no such signal, so
-	 * there the engine's own verdict decides.
+	 * The engine's own verdict decides, not whether the system flagged the
+	 * word. That used to be required on desktop, so the menu would never argue
+	 * with the page, but the system's flag is not reliable enough to gate on:
+	 * Chromium marks words lazily, and after a reload a typo can sit there with
+	 * no squiggle and no misspelling reported to the menu, which left a plain
+	 * typo with nothing offered at all. The one thing kept from the system is
+	 * its learned words, so a word added there is never offered a "fix".
 	 *
 	 * `items`, `section`, and `callback` are not public API. If a later version
 	 * renames them, the system's items simply stay and ours are added beside
@@ -6034,7 +6040,6 @@ export default class PowerEditorPlugin extends Plugin {
 		const items = (menu as unknown as { items?: NativeItem[] }).items;
 		const known = Array.isArray(items);
 		const native = known ? items.filter((i) => i.section === "correction" || i.section === "spellcheck") : [];
-		if (Platform.isDesktopApp && known && !native.length) return;
 
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 		const at = (view && this.rightPressPos(view)) ?? editor.getCursor("from");
@@ -6043,6 +6048,7 @@ export default class PowerEditorPlugin extends Plugin {
 		if (!span) return;
 		const verdict = checkWord(span.word, { lex: this.spellLexicon(), user: userWords(this.settings.spellWords) });
 		if (verdict.ok && !native.length) return;
+		if (!verdict.ok && !native.length && this.systemWords.has(span.word.toLowerCase())) return;
 
 		// keep the system's add: it is what clears the squiggle it drew
 		const learn = native.find((i) => i.section === "spellcheck")?.callback;
@@ -6080,6 +6086,7 @@ export default class PowerEditorPlugin extends Plugin {
 				.onClick((evt) => {
 					this.settings.spellWords = { ...this.settings.spellWords, [span.word]: true };
 					void this.persistSettings();
+					this.systemWords.add(span.word.toLowerCase());
 					if (learn) learn(evt);
 					else this.learnSystemWord(span.word);
 				})
@@ -6118,14 +6125,22 @@ export default class PowerEditorPlugin extends Plugin {
 	 * added on the laptop would otherwise stay squiggled on the desktop: no
 	 * longer offered fixes, but still underlined. The system call is the same
 	 * one Obsidian's own "Add to dictionary" makes.
+	 *
+	 * The same read also remembers what the system has learned, which is the
+	 * only part of its judgment offerSpelling can still consult when the menu
+	 * arrives without a misspelling reported.
 	 */
 	private async syncSpellWords() {
 		const session = this.spellSession();
-		const words = Object.keys(this.settings.spellWords ?? {});
-		if (!session || !words.length) return;
+		if (!session) return;
 		try {
 			const have = new Set((await session.listWordsInSpellCheckerDictionary()).map((w) => w.toLowerCase()));
-			for (const w of words) if (!have.has(w.toLowerCase())) session.addWordToSpellCheckerDictionary(w);
+			this.systemWords = have;
+			for (const w of Object.keys(this.settings.spellWords ?? {})) {
+				if (have.has(w.toLowerCase())) continue;
+				session.addWordToSpellCheckerDictionary(w);
+				have.add(w.toLowerCase());
+			}
 		} catch {
 			/* an older Electron without the list call; nothing lost */
 		}
